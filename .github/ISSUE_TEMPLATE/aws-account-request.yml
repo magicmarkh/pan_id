@@ -1,0 +1,43 @@
+name: AWS Account Request
+description: Request a new AWS account to be provisioned
+title: "[AWS Account Request]: "
+labels: ["aws-account-request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## AWS Account Provisioning Request
+        Please fill out the form below to request a new AWS account. All fields are required.
+
+  - type: input
+    id: account_name
+    attributes:
+      label: Account Name
+      description: The name for the AWS account (alphanumeric, hyphens allowed)
+      placeholder: "my-application-prod"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      description: Select the environment type for this account
+      options:
+        - dev
+        - staging
+        - prod
+    validations:
+      required: true
+
+  - type: dropdown
+    id: owner_team
+    attributes:
+      label: Owner Team
+      description: Team or group responsible for this account
+      options:
+        - platform-engineering
+        - app-dev
+        - security-ops
+    validations:
+      required: true
