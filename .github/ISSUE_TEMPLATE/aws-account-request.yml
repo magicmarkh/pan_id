@@ -1,0 +1,69 @@
+name: AWS Account Request
+description: Request a new AWS account to be provisioned
+title: "[AWS Account Request]: "
+labels: ["aws-account-request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## AWS Account Provisioning Request
+        Please fill out the form below to request a new AWS account. All fields are required.
+
+  - type: input
+    id: account_name
+    attributes:
+      label: Account Name
+      description: The name for the AWS account (alphanumeric, hyphens allowed)
+      placeholder: "my-application-prod"
+    validations:
+      required: true
+
+  - type: input
+    id: account_email
+    attributes:
+      label: Account Email
+      description: Root email address for the AWS account (must be unique)
+      placeholder: "aws-myapp-prod@company.com"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      description: Select the environment type for this account
+      options:
+        - dev
+        - staging
+        - prod
+    validations:
+      required: true
+
+  - type: input
+    id: owner_team
+    attributes:
+      label: Owner Team
+      description: Team or group responsible for this account
+      placeholder: "platform-engineering"
+    validations:
+      required: true
+
+  - type: textarea
+    id: business_justification
+    attributes:
+      label: Business Justification
+      description: Explain why this AWS account is needed
+      placeholder: "This account is required for..."
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Acknowledgment
+      description: Please confirm you understand the following
+      options:
+        - label: I understand this account will be managed via Terraform and changes should not be made manually
+          required: true
+        - label: I have verified the account email is unique and accessible
+          required: true

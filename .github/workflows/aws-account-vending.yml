@@ -1,0 +1,177 @@
+name: AWS Account Vending
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  provision-account:
+    if: github.event.label.name == 'provision-aws-account'
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Parse issue form
+        id: parse
+        uses: stefanbuck/github-issue-parser@v3
+        with:
+          template-path: .github/ISSUE_TEMPLATE/aws-account-request.yml
+
+      - name: Show parsed data
+        run: |
+          echo "Account Name: ${{ steps.parse.outputs.issueparser_account_name }}"
+          echo "Account Email: ${{ steps.parse.outputs.issueparser_account_email }}"
+          echo "Environment: ${{ steps.parse.outputs.issueparser_environment }}"
+          echo "Owner Team: ${{ steps.parse.outputs.issueparser_owner_team }}"
+
+      - name: Authenticate to CyberArk Identity
+        id: cyberark_auth
+        run: |
+          RESPONSE=$(curl -s -X POST "${{ secrets.CYBERARK_TENANT_URL }}/oauth2/token/appuser" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "grant_type=client_credentials" \
+            -d "client_id=${{ secrets.CYBERARK_CLIENT_ID }}" \
+            -d "client_secret=${{ secrets.CYBERARK_CLIENT_SECRET }}")
+
+          ACCESS_TOKEN=$(echo $RESPONSE | jq -r '.access_token')
+
+          if [ "$ACCESS_TOKEN" = "null" ] || [ -z "$ACCESS_TOKEN" ]; then
+            echo "Failed to authenticate to CyberArk Identity"
+            echo "$RESPONSE"
+            exit 1
+          fi
+
+          echo "::add-mask::$ACCESS_TOKEN"
+          echo "token=$ACCESS_TOKEN" >> $GITHUB_OUTPUT
+          echo "✅ Successfully authenticated to CyberArk Identity"
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.6.0"
+
+      - name: Terraform Init
+        id: init
+        working-directory: ./use-cases/aws-account-vending
+        run: terraform init
+
+      - name: Terraform Plan
+        id: plan
+        working-directory: ./use-cases/aws-account-vending
+        env:
+          TF_VAR_account_name: ${{ steps.parse.outputs.issueparser_account_name }}
+          TF_VAR_account_email: ${{ steps.parse.outputs.issueparser_account_email }}
+          TF_VAR_environment: ${{ steps.parse.outputs.issueparser_environment }}
+          TF_VAR_owner_team: ${{ steps.parse.outputs.issueparser_owner_team }}
+          TF_VAR_cyberark_token: ${{ steps.cyberark_auth.outputs.token }}
+        run: |
+          terraform plan -out=tfplan -no-color
+
+      - name: Comment Plan on Issue
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const output = `#### Terraform Plan 📋
+
+            <details><summary>Show Plan</summary>
+
+            \`\`\`
+            ${{ steps.plan.outputs.stdout }}
+            \`\`\`
+
+            </details>
+
+            *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
+
+      - name: Terraform Apply
+        id: apply
+        working-directory: ./use-cases/aws-account-vending
+        env:
+          TF_VAR_account_name: ${{ steps.parse.outputs.issueparser_account_name }}
+          TF_VAR_account_email: ${{ steps.parse.outputs.issueparser_account_email }}
+          TF_VAR_environment: ${{ steps.parse.outputs.issueparser_environment }}
+          TF_VAR_owner_team: ${{ steps.parse.outputs.issueparser_owner_team }}
+          TF_VAR_cyberark_token: ${{ steps.cyberark_auth.outputs.token }}
+        run: |
+          terraform apply -auto-approve tfplan
+
+      - name: Comment Success on Issue
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const output = `### ✅ AWS Account Provisioned Successfully!
+
+            **Account Details:**
+            - **Name:** ${{ steps.parse.outputs.issueparser_account_name }}
+            - **Email:** ${{ steps.parse.outputs.issueparser_account_email }}
+            - **Environment:** ${{ steps.parse.outputs.issueparser_environment }}
+            - **Owner Team:** ${{ steps.parse.outputs.issueparser_owner_team }}
+
+            <details><summary>Terraform Apply Output</summary>
+
+            \`\`\`
+            ${{ steps.apply.outputs.stdout }}
+            \`\`\`
+
+            </details>
+
+            The AWS account has been provisioned and is ready for use.`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
+
+      - name: Close Issue on Success
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.issues.update({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'closed',
+              labels: ['provision-aws-account', 'provisioned']
+            });
+
+      - name: Comment Failure on Issue
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const output = `### ❌ AWS Account Provisioning Failed
+
+            There was an error provisioning the AWS account. Please review the workflow logs and try again.
+
+            **Failed Step:** ${{ job.status }}
+
+            [View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
