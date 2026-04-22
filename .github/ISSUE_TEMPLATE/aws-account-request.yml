@@ -18,15 +18,6 @@ body:
     validations:
       required: true
 
-  - type: input
-    id: account_email
-    attributes:
-      label: Account Email
-      description: Root email address for the AWS account (must be unique)
-      placeholder: "aws-myapp-prod@company.com"
-    validations:
-      required: true
-
   - type: dropdown
     id: environment
     attributes:
@@ -39,31 +30,14 @@ body:
     validations:
       required: true
 
-  - type: input
+  - type: dropdown
     id: owner_team
     attributes:
       label: Owner Team
       description: Team or group responsible for this account
-      placeholder: "platform-engineering"
-    validations:
-      required: true
-
-  - type: textarea
-    id: business_justification
-    attributes:
-      label: Business Justification
-      description: Explain why this AWS account is needed
-      placeholder: "This account is required for..."
-    validations:
-      required: true
-
-  - type: checkboxes
-    id: terms
-    attributes:
-      label: Acknowledgment
-      description: Please confirm you understand the following
       options:
-        - label: I understand this account will be managed via Terraform and changes should not be made manually
-          required: true
-        - label: I have verified the account email is unique and accessible
-          required: true
+        - platform-engineering
+        - app-dev
+        - security-ops
+    validations:
+      required: true

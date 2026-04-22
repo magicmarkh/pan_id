@@ -9,10 +9,14 @@ permissions:
   contents: read
 
 jobs:
-  provision-account:
+  parse-request:
     if: github.event.label.name == 'provision-aws-account'
     runs-on: ubuntu-latest
-    environment: production
+    outputs:
+      account_name: ${{ steps.parse.outputs.issueparser_account_name }}
+      account_email: ${{ steps.generate_email.outputs.account_email }}
+      environment: ${{ steps.parse.outputs.issueparser_environment }}
+      owner_team: ${{ steps.parse.outputs.issueparser_owner_team }}
 
     steps:
       - name: Checkout repository
@@ -24,12 +28,28 @@ jobs:
         with:
           template-path: .github/ISSUE_TEMPLATE/aws-account-request.yml
 
+      - name: Generate account email
+        id: generate_email
+        run: |
+          RANDOM_SUFFIX=$(openssl rand -hex 2)
+          ACCOUNT_EMAIL="aws-${{ steps.parse.outputs.issueparser_account_name }}-${RANDOM_SUFFIX}@yourdomain.com"
+          echo "account_email=$ACCOUNT_EMAIL" >> $GITHUB_OUTPUT
+          echo "Generated email: $ACCOUNT_EMAIL"
+
       - name: Show parsed data
         run: |
           echo "Account Name: ${{ steps.parse.outputs.issueparser_account_name }}"
-          echo "Account Email: ${{ steps.parse.outputs.issueparser_account_email }}"
           echo "Environment: ${{ steps.parse.outputs.issueparser_environment }}"
           echo "Owner Team: ${{ steps.parse.outputs.issueparser_owner_team }}"
+
+  provision-account:
+    needs: parse-request
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Authenticate to CyberArk Identity
         id: cyberark_auth
@@ -66,10 +86,10 @@ jobs:
         id: plan
         working-directory: ./use-cases/aws-account-vending
         env:
-          TF_VAR_account_name: ${{ steps.parse.outputs.issueparser_account_name }}
-          TF_VAR_account_email: ${{ steps.parse.outputs.issueparser_account_email }}
-          TF_VAR_environment: ${{ steps.parse.outputs.issueparser_environment }}
-          TF_VAR_owner_team: ${{ steps.parse.outputs.issueparser_owner_team }}
+          TF_VAR_account_name: ${{ needs.parse-request.outputs.account_name }}
+          TF_VAR_account_email: ${{ needs.parse-request.outputs.account_email }}
+          TF_VAR_environment: ${{ needs.parse-request.outputs.environment }}
+          TF_VAR_owner_team: ${{ needs.parse-request.outputs.owner_team }}
           TF_VAR_cyberark_token: ${{ steps.cyberark_auth.outputs.token }}
         run: |
           terraform plan -out=tfplan -no-color
@@ -102,10 +122,10 @@ jobs:
         id: apply
         working-directory: ./use-cases/aws-account-vending
         env:
-          TF_VAR_account_name: ${{ steps.parse.outputs.issueparser_account_name }}
-          TF_VAR_account_email: ${{ steps.parse.outputs.issueparser_account_email }}
-          TF_VAR_environment: ${{ steps.parse.outputs.issueparser_environment }}
-          TF_VAR_owner_team: ${{ steps.parse.outputs.issueparser_owner_team }}
+          TF_VAR_account_name: ${{ needs.parse-request.outputs.account_name }}
+          TF_VAR_account_email: ${{ needs.parse-request.outputs.account_email }}
+          TF_VAR_environment: ${{ needs.parse-request.outputs.environment }}
+          TF_VAR_owner_team: ${{ needs.parse-request.outputs.owner_team }}
           TF_VAR_cyberark_token: ${{ steps.cyberark_auth.outputs.token }}
         run: |
           terraform apply -auto-approve tfplan
@@ -119,10 +139,10 @@ jobs:
             const output = `### ✅ AWS Account Provisioned Successfully!
 
             **Account Details:**
-            - **Name:** ${{ steps.parse.outputs.issueparser_account_name }}
-            - **Email:** ${{ steps.parse.outputs.issueparser_account_email }}
-            - **Environment:** ${{ steps.parse.outputs.issueparser_environment }}
-            - **Owner Team:** ${{ steps.parse.outputs.issueparser_owner_team }}
+            - **Name:** ${{ needs.parse-request.outputs.account_name }}
+            - **Email:** ${{ needs.parse-request.outputs.account_email }}
+            - **Environment:** ${{ needs.parse-request.outputs.environment }}
+            - **Owner Team:** ${{ needs.parse-request.outputs.owner_team }}
 
             <details><summary>Terraform Apply Output</summary>
 
