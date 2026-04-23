@@ -29,4 +29,5 @@ variable "cyberark_token" {
   description = "OAuth2 access token from CyberArk Identity"
   type        = string
   sensitive   = true
+  default     = ""
 }
