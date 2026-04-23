@@ -7,6 +7,7 @@ on:
 permissions:
   issues: write
   contents: read
+  id-token: write # Required for OIDC authentication with AWS
 
 jobs:
   parse-request:
@@ -71,6 +72,13 @@ jobs:
           echo "::add-mask::$ACCESS_TOKEN"
           echo "token=$ACCESS_TOKEN" >> $GITHUB_OUTPUT
           echo "✅ Successfully authenticated to CyberArk Identity"
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_MANAGEMENT_ACCOUNT_ID }}:role/GitHubActionsOrgProvisioner
+          aws-region: us-east-1
+          role-session-name: GitHubActions-AccountVending-${{ github.run_id }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
