@@ -98,7 +98,7 @@ jobs:
           TF_VAR_account_email: ${{ needs.parse-request.outputs.account_email }}
           TF_VAR_environment: ${{ needs.parse-request.outputs.environment }}
           TF_VAR_owner_team: ${{ needs.parse-request.outputs.owner_team }}
-          TF_VAR_cyberark_token: ${{ steps.cyberark_auth.outputs.token }}
+        #  TF_VAR_cyberark_token: ${{ steps.cyberark_auth.outputs.token }}
         run: |
           terraform plan -out=tfplan -no-color
 
@@ -134,7 +134,7 @@ jobs:
           TF_VAR_account_email: ${{ needs.parse-request.outputs.account_email }}
           TF_VAR_environment: ${{ needs.parse-request.outputs.environment }}
           TF_VAR_owner_team: ${{ needs.parse-request.outputs.owner_team }}
-          TF_VAR_cyberark_token: ${{ steps.cyberark_auth.outputs.token }}
+     #     TF_VAR_cyberark_token: ${{ steps.cyberark_auth.outputs.token }}
         run: |
           terraform apply -auto-approve tfplan
 
