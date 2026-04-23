@@ -52,26 +52,26 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Authenticate to CyberArk Identity
-        id: cyberark_auth
-        run: |
-          RESPONSE=$(curl -s -X POST "${{ secrets.CYBERARK_TENANT_URL }}/oauth2/token/appuser" \
-            -H "Content-Type: application/x-www-form-urlencoded" \
-            -d "grant_type=client_credentials" \
-            -d "client_id=${{ secrets.CYBERARK_CLIENT_ID }}" \
-            -d "client_secret=${{ secrets.CYBERARK_CLIENT_SECRET }}")
+    #  - name: Authenticate to CyberArk Identity
+    #    id: cyberark_auth
+     #   run: |
+     #     RESPONSE=$(curl -s -X POST "${{ secrets.CYBERARK_TENANT_URL }}/oauth2/token/appuser" \
+    #        -H "Content-Type: application/x-www-form-urlencoded" \
+    #        -d "grant_type=client_credentials" \
+    #        -d "client_id=${{ secrets.CYBERARK_CLIENT_ID }}" \
+    #        -d "client_secret=${{ secrets.CYBERARK_CLIENT_SECRET }}")
 
-          ACCESS_TOKEN=$(echo $RESPONSE | jq -r '.access_token')
+    #      ACCESS_TOKEN=$(echo $RESPONSE | jq -r '.access_token')
 
-          if [ "$ACCESS_TOKEN" = "null" ] || [ -z "$ACCESS_TOKEN" ]; then
-            echo "Failed to authenticate to CyberArk Identity"
-            echo "$RESPONSE"
-            exit 1
-          fi
+    #      if [ "$ACCESS_TOKEN" = "null" ] || [ -z "$ACCESS_TOKEN" ]; then
+    #        echo "Failed to authenticate to CyberArk Identity"
+    #        echo "$RESPONSE"
+     #       exit 1
+    #      fi
 
-          echo "::add-mask::$ACCESS_TOKEN"
-          echo "token=$ACCESS_TOKEN" >> $GITHUB_OUTPUT
-          echo "✅ Successfully authenticated to CyberArk Identity"
+   #       echo "::add-mask::$ACCESS_TOKEN"
+    #      echo "token=$ACCESS_TOKEN" >> $GITHUB_OUTPUT
+   #       echo "✅ Successfully authenticated to CyberArk Identity"
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
