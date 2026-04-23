@@ -80,6 +80,9 @@ jobs:
           aws-region: us-east-1
           role-session-name: GitHubActions-AccountVending-${{ github.run_id }}
 
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+        
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
