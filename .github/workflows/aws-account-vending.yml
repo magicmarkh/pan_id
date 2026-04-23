@@ -33,7 +33,7 @@ jobs:
         id: generate_email
         run: |
           RANDOM_SUFFIX=$(openssl rand -hex 2)
-          ACCOUNT_EMAIL="aws-${{ steps.parse.outputs.issueparser_account_name }}-${RANDOM_SUFFIX}@yourdomain.com"
+          ACCOUNT_EMAIL="aws-${{ steps.parse.outputs.issueparser_account_name }}-${RANDOM_SUFFIX}@jdsec.com"
           echo "account_email=$ACCOUNT_EMAIL" >> $GITHUB_OUTPUT
           echo "Generated email: $ACCOUNT_EMAIL"
 
