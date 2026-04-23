@@ -42,9 +42,9 @@ variable "organizational_unit_id" {
 }
 
 variable "enable_cloudtrail" {
-  description = "Enable AWS CloudTrail in the new account"
+  description = "Enable AWS CloudTrail in the new account (reserved for future phase)"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "enable_config" {
@@ -54,9 +54,9 @@ variable "enable_config" {
 }
 
 variable "enable_guardduty" {
-  description = "Enable Amazon GuardDuty in the new account"
+  description = "Enable Amazon GuardDuty in the new account (reserved for future phase)"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "tags" {

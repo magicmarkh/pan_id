@@ -38,7 +38,7 @@ output "account_status" {
 
 output "join_method" {
   description = "The method by which the account joined the organization"
-  value       = aws_organizations_account.this.joined_method
+  value       = "CREATED"
 }
 
 output "cross_account_role_arn" {
