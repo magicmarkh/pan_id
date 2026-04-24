@@ -9,6 +9,9 @@ permissions:
   contents: read
   id-token: write # Required for OIDC authentication with AWS
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   parse-request:
     if: github.event.label.name == 'provision-aws-account'
@@ -52,27 +55,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-    #  - name: Authenticate to CyberArk Identity
-    #    id: cyberark_auth
-     #   run: |
-     #     RESPONSE=$(curl -s -X POST "${{ secrets.CYBERARK_TENANT_URL }}/oauth2/token/appuser" \
-    #        -H "Content-Type: application/x-www-form-urlencoded" \
-    #        -d "grant_type=client_credentials" \
-    #        -d "client_id=${{ secrets.CYBERARK_CLIENT_ID }}" \
-    #        -d "client_secret=${{ secrets.CYBERARK_CLIENT_SECRET }}")
-
-    #      ACCESS_TOKEN=$(echo $RESPONSE | jq -r '.access_token')
-
-    #      if [ "$ACCESS_TOKEN" = "null" ] || [ -z "$ACCESS_TOKEN" ]; then
-    #        echo "Failed to authenticate to CyberArk Identity"
-    #        echo "$RESPONSE"
-     #       exit 1
-    #      fi
-
-   #       echo "::add-mask::$ACCESS_TOKEN"
-    #      echo "token=$ACCESS_TOKEN" >> $GITHUB_OUTPUT
-   #       echo "✅ Successfully authenticated to CyberArk Identity"
-
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -80,9 +62,23 @@ jobs:
           aws-region: us-east-1
           role-session-name: GitHubActions-AccountVending-${{ github.run_id }}
 
-      - name: Verify AWS identity
-        run: aws sts get-caller-identity
-        
+      - name: Check for duplicate account name
+        id: duplicate_check
+        run: |
+          ACCOUNT_NAME="${{ needs.parse-request.outputs.account_name }}"
+          EXISTING=$(aws organizations list-accounts \
+            --query "Accounts[?Name=='${ACCOUNT_NAME}'].Id" \
+            --output text)
+
+          if [ -n "$EXISTING" ]; then
+            echo "❌ An AWS account named '${ACCOUNT_NAME}' already exists (ID: ${EXISTING})"
+            echo "duplicate=true" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+          echo "✅ Account name '${ACCOUNT_NAME}' is available"
+          echo "duplicate=false" >> $GITHUB_OUTPUT
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -101,7 +97,6 @@ jobs:
           TF_VAR_account_email: ${{ needs.parse-request.outputs.account_email }}
           TF_VAR_environment: ${{ needs.parse-request.outputs.environment }}
           TF_VAR_owner_team: ${{ needs.parse-request.outputs.owner_team }}
-        #  TF_VAR_cyberark_token: ${{ steps.cyberark_auth.outputs.token }}
         run: |
           terraform plan -out=tfplan -no-color
 
@@ -137,7 +132,6 @@ jobs:
           TF_VAR_account_email: ${{ needs.parse-request.outputs.account_email }}
           TF_VAR_environment: ${{ needs.parse-request.outputs.environment }}
           TF_VAR_owner_team: ${{ needs.parse-request.outputs.owner_team }}
-     #     TF_VAR_cyberark_token: ${{ steps.cyberark_auth.outputs.token }}
         run: |
           terraform apply -auto-approve tfplan
 
@@ -197,6 +191,9 @@ jobs:
             There was an error provisioning the AWS account. Please review the workflow logs and try again.
 
             **Failed Step:** ${{ job.status }}
+
+            > **Note:** If this failed due to a duplicate account name, choose a different
+            > name and submit a new issue.
 
             [View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`;
 

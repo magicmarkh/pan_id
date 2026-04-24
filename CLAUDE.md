@@ -55,6 +55,7 @@ coud_demos/
 | `CYBERARK_TENANT_URL` | CyberArk tenant URL e.g. `https://abc1234.id.cyberark.cloud` |
 | `CYBERARK_CLIENT_ID` | OAuth2 service account client ID |
 | `CYBERARK_CLIENT_SECRET` | OAuth2 service account client secret |
+| `AWS_MANAGEMENT_ACCOUNT_ID` | 12-digit management account ID used to construct IAM ARNs |
 
 ## GitHub Environment Required
 - Environment name: `production`
@@ -63,24 +64,29 @@ coud_demos/
 
 ## AWS Prerequisites (Not Yet Configured)
 - AWS Organizations management account must exist
-- IAM role `TerraformOrgAdmin` needed in management account
+- IAM role `GitHubActionsOrgProvisioner` needed in management account
+- `GitHubActionsOrgProvisioner` IAM role must have `AWSOrganizationsFullAccess` managed policy attached (least-privilege refinement deferred)
+- The role also requires `organizations:ListAccounts` for the duplicate account name check step
 - Trust policy for that role: not yet written — next item to build
-- Required permissions: `organizations:CreateAccount`, `iam:*`, `sso:*`
+- Required permissions: `organizations:CreateAccount`, `organizations:ListAccounts`, `iam:*`, `sso:*`
 
 ## What's Built
 - [x] GitHub Issue form (aws-account-request.yml)
 - [x] GitHub Actions workflow (parse → approve → auth → terraform)
+- [x] OIDC authentication to AWS (no static keys)
+- [x] Duplicate account name guard
+- [x] `modules/aws-account/` — creates `aws_organizations_account` (CloudTrail/GuardDuty deferred to Phase 2)
 - [x] CyberArk auth module scaffold
-- [x] AWS account module (aws_organizations_account resource)
 - [x] IAM policies module scaffold
 - [x] Use-case root Terraform config
 - [x] README.md
 
 ## What's NOT Built Yet (Next Phases)
-- [ ] `modules/aws-iam-policies/` — actual IAM policy resources
-- [ ] IAM trust policy for `TerraformOrgAdmin` role
+- [ ] Phase 2: baseline security in child accounts (CloudTrail, GuardDuty, account alias) — blocked on `aws.child` provider chicken-and-egg; needs separate apply pass or a data source approach
+- [ ] `modules/aws-iam-policies/` — three roles (RequesterPowerUser, AuditorReadOnly, CloudOpsAdmin) — next feature
+- [ ] IAM trust policy for `GitHubActionsOrgProvisioner` role
 - [ ] S3 remote state backend setup
-- [ ] CyberArk idsec provider resources beyond provider scaffold
+- [ ] CyberArk idsec provider integration — future phase
 - [ ] IAM Identity Center / SSO permission set assignments
 - [ ] Additional use cases (future: secrets rotation, user onboarding, etc.)
 
