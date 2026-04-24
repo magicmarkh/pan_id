@@ -82,13 +82,54 @@ coud_demos/
 - [x] README.md
 
 ## What's NOT Built Yet (Next Phases)
-- [ ] Phase 2: baseline security in child accounts (CloudTrail, GuardDuty, account alias) — blocked on `aws.child` provider chicken-and-egg; needs separate apply pass or a data source approach
-- [ ] `modules/aws-iam-policies/` — three roles (RequesterPowerUser, AuditorReadOnly, CloudOpsAdmin) — next feature
-- [ ] IAM trust policy for `GitHubActionsOrgProvisioner` role
-- [ ] S3 remote state backend setup
-- [ ] CyberArk idsec provider integration — future phase
-- [ ] IAM Identity Center / SSO permission set assignments
-- [ ] Additional use cases (future: secrets rotation, user onboarding, etc.)
+
+### Phase 2 — Baseline Security in Child Accounts
+- [ ] CloudTrail, GuardDuty, and account alias in newly created accounts
+- [ ] Requires a separate Terraform apply pass after account ID is known
+      (blocked by aws.child provider chicken-and-egg on first apply)
+- [ ] New module: `modules/aws-baseline-security/`
+
+### Phase 3 — CyberArk Identity Access Provisioning (PRIMARY DEMO STORY)
+This is the core CyberArk narrative: policy as code, living in IaC alongside
+the infrastructure it governs. All access is defined in Terraform, version
+controlled, and enforced through CyberArk Identity.
+
+- [ ] Implement `modules/aws-iam-policies/` — three roles created in the
+      new account via the idsec Terraform provider:
+        - `RequesterPowerUser` — the engineer who opened the issue
+        - `AuditorReadOnly`    — auditors group (ReadOnly + SecurityAudit)
+        - `CloudOpsAdmin`      — cloud-ops team (AdministratorAccess)
+- [ ] Wire requester IAM ARN from GitHub issue opener (`github.event.issue.user.login`)
+- [ ] Auditor and CloudOps principal lists sourced from GitHub secrets
+- [ ] CyberArk idsec provider replaces or augments native IAM role assignments
+- [ ] CyberArk auth step re-enabled in workflow (currently commented out)
+- [ ] Auth endpoint: `POST {CYBERARK_TENANT_URL}/oauth2/platformtoken`
+
+### Phase 4 — Deprovisioning Workflow
+Full lifecycle: every resource created during provisioning can be torn down
+via a second GitHub issue, keeping the closed-loop pattern consistent.
+
+- [ ] New issue template: `.github/ISSUE_TEMPLATE/aws-account-deprovision.yml`
+      Fields: account name, account ID, reason for deprovisioning
+- [ ] New workflow: `.github/workflows/aws-account-deprovision.yml`
+      Triggered by label: `deprovision-aws-account`
+- [ ] Deprovisioning steps:
+        1. Authenticate to CyberArk Identity (same OAuth2 flow)
+        2. Remove all CyberArk role assignments from the account
+        3. Move account to a quarantine OU in AWS Organizations
+        4. Detach all IAM roles and policies from the account
+        5. Comment full deprovisioning summary on issue and close it
+- [ ] Note: AWS accounts cannot be deleted via API — quarantine OU approach
+      is the correct pattern. Manual account closure via AWS console remains
+      a separate out-of-band step if full deletion is required.
+- [ ] New module: `modules/aws-deprovision/`
+
+### Phase 5 — Additional Use Cases (Future)
+- [ ] User onboarding — provision CyberArk Identity user + AWS role assignment
+      triggered by GitHub issue
+- [ ] Secrets rotation — trigger CyberArk secrets rotation via GitHub Actions
+- [ ] Cross-account access — grant an existing user access to a new account
+      without full reprovisioning
 
 ## Coding Conventions
 - All Terraform modules follow: `main.tf`, `variables.tf`, `outputs.tf`
