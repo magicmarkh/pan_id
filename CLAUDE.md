@@ -146,3 +146,18 @@ via a second GitHub issue, keeping the closed-loop pattern consistent.
 - Grant type: `client_credentials`
 - Token is short-lived, masked immediately in logs with `::add-mask::`
 - Token is passed to Terraform as `TF_VAR_cyberark_token` (sensitive)
+
+## Agent Instructions (Claude Code)
+
+When working autonomously on this repo:
+
+1. Always read this file fully before making any changes
+2. Never commit directly to main — use feature branches
+3. After pushing, run `gh run watch` and wait for the workflow to complete
+4. If the workflow fails, read `gh run view --log-failed` and fix the issue
+5. Iterate until the workflow succeeds before declaring done
+6. Do not touch files outside the scope of the current task
+7. The `environment: production` gate in the workflow requires manual
+   approval — note this in your output and wait for it before reading results
+8. When done, summarize: what changed, what was tested, what the
+   workflow output showed

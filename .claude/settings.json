@@ -1,0 +1,8 @@
+{
+  "autoApprove": {
+    "bash": true,
+    "read": true,
+    "write": true
+  },
+  "model": "claude-sonnet-4-5"
+}
