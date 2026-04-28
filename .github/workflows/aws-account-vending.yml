@@ -17,6 +17,7 @@ jobs:
     if: github.event.label.name == 'provision-aws-account'
     runs-on: ubuntu-latest
     outputs:
+      mode: ${{ steps.parse.outputs.issueparser_mode }}
       account_name: ${{ steps.parse.outputs.issueparser_account_name }}
       account_email: ${{ steps.generate_email.outputs.account_email }}
       environment: ${{ steps.parse.outputs.issueparser_environment }}
@@ -63,6 +64,7 @@ jobs:
           role-session-name: GitHubActions-AccountVending-${{ github.run_id }}
 
       - name: Check for duplicate account name
+        if: needs.parse-request.outputs.mode == 'Create'
         id: duplicate_check
         run: |
           ACCOUNT_NAME="${{ needs.parse-request.outputs.account_name }}"
@@ -79,17 +81,98 @@ jobs:
           echo "✅ Account name '${ACCOUNT_NAME}' is available"
           echo "duplicate=false" >> $GITHUB_OUTPUT
 
+      - name: Find available pool account
+        if: needs.parse-request.outputs.mode == 'Simulate'
+        id: find_account
+        run: |
+          POOL_OU_ID="${{ secrets.AWS_POOL_OU_ID }}"
+
+          # List all accounts in the pool OU
+          ACCOUNTS=$(aws organizations list-accounts-for-parent \
+            --parent-id "$POOL_OU_ID" \
+            --query 'Accounts[?Status==`ACTIVE`].Id' \
+            --output text)
+
+          if [ -z "$ACCOUNTS" ]; then
+            echo "❌ No accounts found in pool OU"
+            exit 1
+          fi
+
+          # Find first account tagged Status=Available
+          ASSIGNED=""
+          for ACCOUNT_ID in $ACCOUNTS; do
+            STATUS=$(aws organizations list-tags-for-resource \
+              --resource-id "$ACCOUNT_ID" \
+              --query "Tags[?Key=='Status'].Value" \
+              --output text)
+
+            if [ "$STATUS" = "Available" ]; then
+              ASSIGNED=$ACCOUNT_ID
+              break
+            fi
+          done
+
+          if [ -z "$ASSIGNED" ]; then
+            echo "❌ No available pool accounts found. All pool accounts are in use."
+            exit 1
+          fi
+
+          echo "✅ Found available pool account: $ASSIGNED"
+          echo "account_id=$ASSIGNED" >> $GITHUB_OUTPUT
+
+      - name: Assign pool account
+        if: needs.parse-request.outputs.mode == 'Simulate'
+        id: assign_account
+        run: |
+          ACCOUNT_ID="${{ steps.find_account.outputs.account_id }}"
+          ACCOUNT_NAME="${{ needs.parse-request.outputs.account_name }}"
+          ACTIVE_OU_ID="${{ secrets.AWS_ACTIVE_OU_ID }}"
+          POOL_OU_ID="${{ secrets.AWS_POOL_OU_ID }}"
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          # Move account from pool OU to active OU
+          aws organizations move-account \
+            --account-id "$ACCOUNT_ID" \
+            --source-parent-id "$POOL_OU_ID" \
+            --destination-parent-id "$ACTIVE_OU_ID"
+
+          echo "✅ Moved account $ACCOUNT_ID to active OU"
+
+          # Update tags
+          aws organizations tag-resource \
+            --resource-id "$ACCOUNT_ID" \
+            --tags \
+              Key=Status,Value=InUse \
+              Key=AssignedTo,Value="$ACCOUNT_NAME" \
+              Key=AssignedAt,Value="$TIMESTAMP" \
+              Key=Environment,Value="${{ needs.parse-request.outputs.environment }}" \
+              Key=OwnerTeam,Value="${{ needs.parse-request.outputs.owner_team }}"
+
+          echo "✅ Tagged account as InUse"
+
+          # Update account alias (requires assuming role into child account)
+          ALIAS=$(echo "$ACCOUNT_NAME" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+          aws iam create-account-alias --account-alias "lab-${ALIAS}" \
+            || aws iam update-account-alias --account-alias "lab-${ALIAS}" \
+            || echo "⚠️ Could not update account alias (non-fatal)"
+
+          echo "account_id=$ACCOUNT_ID" >> $GITHUB_OUTPUT
+          echo "account_alias=lab-${ALIAS}" >> $GITHUB_OUTPUT
+
       - name: Setup Terraform
+        if: needs.parse-request.outputs.mode == 'Create'
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.14.9"
 
       - name: Terraform Init
+        if: needs.parse-request.outputs.mode == 'Create'
         id: init
         working-directory: ./use-cases/aws-account-vending
         run: terraform init
 
       - name: Terraform Plan
+        if: needs.parse-request.outputs.mode == 'Create'
         id: plan
         working-directory: ./use-cases/aws-account-vending
         env:
@@ -101,6 +184,7 @@ jobs:
           terraform plan -out=tfplan -no-color
 
       - name: Comment Plan on Issue
+        if: needs.parse-request.outputs.mode == 'Create'
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -125,6 +209,7 @@ jobs:
             });
 
       - name: Terraform Apply
+        if: needs.parse-request.outputs.mode == 'Create'
         id: apply
         working-directory: ./use-cases/aws-account-vending
         env:
@@ -141,23 +226,31 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
+            const mode = "${{ needs.parse-request.outputs.mode }}";
+            const isSimulate = mode === "Simulate";
+
+            const accountId = isSimulate
+              ? "${{ steps.assign_account.outputs.account_id }}"
+              : "Account ID will be available in Terraform outputs";
+
+            const modeNote = isSimulate
+              ? "⚡ **Simulated** — recycled from lab pool (fast mode)"
+              : "🏗️ **Real account** — provisioned via AWS Organizations";
+
             const output = `### ✅ AWS Account Provisioned Successfully!
 
+            ${modeNote}
+
             **Account Details:**
-            - **Name:** ${{ needs.parse-request.outputs.account_name }}
-            - **Email:** ${{ needs.parse-request.outputs.account_email }}
-            - **Environment:** ${{ needs.parse-request.outputs.environment }}
-            - **Owner Team:** ${{ needs.parse-request.outputs.owner_team }}
+            | Field | Value |
+            |---|---|
+            | **Requested Name** | ${{ needs.parse-request.outputs.account_name }} |
+            | **Account ID** | ${accountId} |
+            | **Environment** | ${{ needs.parse-request.outputs.environment }} |
+            | **Owner Team** | ${{ needs.parse-request.outputs.owner_team }} |
+            | **Mode** | ${mode} |
 
-            <details><summary>Terraform Apply Output</summary>
-
-            \`\`\`
-            ${{ steps.apply.outputs.stdout }}
-            \`\`\`
-
-            </details>
-
-            The AWS account has been provisioned and is ready for use.`;
+            The account is ready for use.`;
 
             github.rest.issues.createComment({
               issue_number: context.issue.number,

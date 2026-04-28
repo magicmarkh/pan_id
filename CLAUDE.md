@@ -56,11 +56,34 @@ coud_demos/
 | `CYBERARK_CLIENT_ID` | OAuth2 service account client ID |
 | `CYBERARK_CLIENT_SECRET` | OAuth2 service account client secret |
 | `AWS_MANAGEMENT_ACCOUNT_ID` | 12-digit management account ID used to construct IAM ARNs |
+| `AWS_POOL_OU_ID` | OU ID containing pre-staged lab accounts |
+| `AWS_ACTIVE_OU_ID` | OU ID where active/assigned accounts live |
 
 ## GitHub Environment Required
 - Environment name: `production`
 - Setting: Required reviewers enabled
 - Location: Repo → Settings → Environments
+
+## Lab Setup
+
+### Pool OU Accounts
+Three accounts are pre-staged in the pool OU. Before running simulate mode,
+ensure all three have the following tag applied in AWS Organizations:
+- Key: `Status`, Value: `Available`
+
+### Labels Required in GitHub
+- `provision-aws-account` — triggers provisioning workflow
+- `provisioned` — applied on successful provisioning
+- `deprovision-aws-account` — triggers deprovisioning workflow
+- `returned-to-pool` — applied on successful return to pool
+
+### Demo Flow
+1. Submit issue → select Simulate → apply `provision-aws-account` label
+2. Approve production gate
+3. Account moves from pool OU to active OU, alias updated, comment on issue
+4. Demo the account
+5. Submit deprovision issue → apply `deprovision-aws-account` label
+6. Account returns to pool, tagged Available, ready for next demo
 
 ## AWS Prerequisites (Not Yet Configured)
 - AWS Organizations management account must exist
@@ -80,6 +103,9 @@ coud_demos/
 - [x] IAM policies module scaffold
 - [x] Use-case root Terraform config
 - [x] README.md
+- [x] Lab simulation mode — recycles pool accounts instead of creating new ones
+- [x] Deprovisioning workflow — returns simulated accounts to pool
+- [x] Account availability tracked via AWS resource tags (`Status = Available/InUse`)
 
 ## What's NOT Built Yet (Next Phases)
 

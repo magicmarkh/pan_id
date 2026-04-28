@@ -9,6 +9,19 @@ body:
         ## AWS Account Provisioning Request
         Please fill out the form below to request a new AWS account. All fields are required.
 
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Provisioning Mode
+      description: >
+        Simulate uses a pre-staged lab account (faster, recommended for demos).
+        Create provisions a real new AWS account (slower, uses org account quota).
+      options:
+        - Simulate
+        - Create
+    validations:
+      required: true
+
   - type: input
     id: account_name
     attributes:
