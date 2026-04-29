@@ -1,8 +1,10 @@
 {
-  "autoApprove": {
-    "bash": true,
-    "read": true,
-    "write": true
+  "permissions": {
+    "allow": [
+      "Bash(*)",
+      "Read(*)",
+      "Write(*)"
+    ]
   },
-  "model": "claude-sonnet-4-5"
+  "model": "claude-sonnet-4-6"
 }

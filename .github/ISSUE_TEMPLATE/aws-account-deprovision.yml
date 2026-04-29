@@ -1,0 +1,38 @@
+name: AWS Account Deprovision Request
+description: Return a lab account to the pool or deprovision a real account
+title: "[Deprovision]: "
+labels: ["deprovision-aws-account"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## AWS Account Deprovisioning Request
+        Use this form to return a simulated lab account to the pool.
+
+  - type: input
+    id: account_id
+    attributes:
+      label: Account ID
+      description: The 12-digit AWS account ID to deprovision
+      placeholder: "123456789012"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Provisioning Mode Used
+      description: Select the mode that was used when this account was provisioned
+      options:
+        - Simulate
+        - Create
+    validations:
+      required: true
+
+  - type: textarea
+    id: reason
+    attributes:
+      label: Reason for Deprovisioning
+      placeholder: "Demo complete, returning to pool"
+    validations:
+      required: true
