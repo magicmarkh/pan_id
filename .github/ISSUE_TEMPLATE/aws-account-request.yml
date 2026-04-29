@@ -7,7 +7,9 @@ body:
     attributes:
       value: |
         ## AWS Account Provisioning Request
-        Please fill out the form below to request a new AWS account. All fields are required.
+
+        **Before submitting:** run the [Refresh Issue Templates](../../actions/workflows/refresh-issue-templates.yml)
+        workflow so the dropdowns below reflect current AWS state.
 
   - type: dropdown
     id: mode
@@ -22,14 +24,40 @@ body:
     validations:
       required: true
 
+  - type: dropdown
+    id: pool_account
+    attributes:
+      label: Available Lab Account (Simulate mode only)
+      description: >
+        Select a pool account to assign. Only used when Provisioning Mode = Simulate.
+        Run the "Refresh Issue Templates" workflow to populate with current available accounts.
+      options:
+        - Run 'Refresh Issue Templates' workflow to populate this list
+    validations:
+      required: false
+
   - type: input
     id: account_name
     attributes:
-      label: Account Name
-      description: The name for the AWS account (alphanumeric, hyphens allowed)
+      label: Account Name / Label
+      description: >
+        A label for this account assignment (Simulate) or the actual AWS account name (Create).
+        Alphanumeric and hyphens only.
       placeholder: "my-application-prod"
     validations:
       required: true
+
+  - type: dropdown
+    id: target_ou
+    attributes:
+      label: Target Organizational Unit (Create mode only)
+      description: >
+        OU where the new account will be placed. Only used when Provisioning Mode = Create.
+        Run the "Refresh Issue Templates" workflow to populate with current OUs.
+      options:
+        - Run 'Refresh Issue Templates' workflow to populate this list
+    validations:
+      required: false
 
   - type: dropdown
     id: environment

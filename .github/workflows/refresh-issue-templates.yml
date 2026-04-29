@@ -1,0 +1,199 @@
+name: Refresh Issue Templates
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Print updated YAML to logs without committing"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+  schedule:
+    # Refresh daily at 06:00 UTC — ensures templates are up-to-date before demos
+    - cron: "0 6 * * *"
+
+permissions:
+  contents: write
+  id-token: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  refresh-templates:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_MANAGEMENT_ACCOUNT_ID }}:role/GitHubActionsOrgProvisioner
+          aws-region: us-east-1
+          role-session-name: GitHubActions-RefreshTemplates-${{ github.run_id }}
+
+      - name: Query available pool accounts
+        id: pool_accounts
+        run: |
+          POOL_OU_ID="${{ secrets.AWS_POOL_OU_ID }}"
+
+          ACCOUNT_IDS=$(aws organizations list-accounts-for-parent \
+            --parent-id "$POOL_OU_ID" \
+            --query 'Accounts[?Status==`ACTIVE`].Id' \
+            --output text)
+
+          AVAILABLE_JSON="[]"
+          for ACCOUNT_ID in $ACCOUNT_IDS; do
+            STATUS=$(aws organizations list-tags-for-resource \
+              --resource-id "$ACCOUNT_ID" \
+              --query "Tags[?Key=='Status'].Value" \
+              --output text)
+
+            if [ "$STATUS" = "Available" ]; then
+              NAME=$(aws organizations describe-account \
+                --account-id "$ACCOUNT_ID" \
+                --query 'Account.Name' \
+                --output text)
+              ENTRY=$(printf '{"id":"%s","name":"%s"}' "$ACCOUNT_ID" "$NAME")
+              AVAILABLE_JSON=$(echo "$AVAILABLE_JSON" | jq --argjson e "$ENTRY" '. + [$e]')
+            fi
+          done
+
+          echo "available_accounts=$AVAILABLE_JSON" >> $GITHUB_OUTPUT
+          echo "Found $(echo "$AVAILABLE_JSON" | jq length) available pool accounts"
+
+      - name: Query active (InUse) accounts
+        id: active_accounts
+        run: |
+          ACTIVE_OU_ID="${{ secrets.AWS_ACTIVE_OU_ID }}"
+
+          ACCOUNT_IDS=$(aws organizations list-accounts-for-parent \
+            --parent-id "$ACTIVE_OU_ID" \
+            --query 'Accounts[?Status==`ACTIVE`].Id' \
+            --output text)
+
+          ACTIVE_JSON="[]"
+          for ACCOUNT_ID in $ACCOUNT_IDS; do
+            NAME=$(aws organizations describe-account \
+              --account-id "$ACCOUNT_ID" \
+              --query 'Account.Name' \
+              --output text)
+            ENTRY=$(printf '{"id":"%s","name":"%s"}' "$ACCOUNT_ID" "$NAME")
+            ACTIVE_JSON=$(echo "$ACTIVE_JSON" | jq --argjson e "$ENTRY" '. + [$e]')
+          done
+
+          echo "active_accounts=$ACTIVE_JSON" >> $GITHUB_OUTPUT
+          echo "Found $(echo "$ACTIVE_JSON" | jq length) active accounts"
+
+      - name: Query available target OUs
+        id: target_ous
+        run: |
+          # Find root of the organization
+          ROOT_ID=$(aws organizations list-roots \
+            --query 'Roots[0].Id' \
+            --output text)
+
+          # List direct child OUs of the root
+          OU_IDS=$(aws organizations list-organizational-units-for-parent \
+            --parent-id "$ROOT_ID" \
+            --query 'OrganizationalUnits[].Id' \
+            --output text)
+
+          OU_JSON="[]"
+          for OU_ID in $OU_IDS; do
+            OU_NAME=$(aws organizations describe-organizational-unit \
+              --organizational-unit-id "$OU_ID" \
+              --query 'OrganizationalUnit.Name' \
+              --output text)
+            ENTRY=$(printf '{"id":"%s","name":"%s"}' "$OU_ID" "$OU_NAME")
+            OU_JSON=$(echo "$OU_JSON" | jq --argjson e "$ENTRY" '. + [$e]')
+          done
+
+          echo "target_ous=$OU_JSON" >> $GITHUB_OUTPUT
+          echo "Found $(echo "$OU_JSON" | jq length) OUs"
+
+      - name: Install PyYAML
+        run: pip install pyyaml --quiet
+
+      - name: Update issue templates
+        id: update_templates
+        env:
+          AVAILABLE_ACCOUNTS: ${{ steps.pool_accounts.outputs.available_accounts }}
+          ACTIVE_ACCOUNTS: ${{ steps.active_accounts.outputs.active_accounts }}
+          TARGET_OUS: ${{ steps.target_ous.outputs.target_ous }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: |
+          python3 << 'EOF'
+          import yaml
+          import json
+          import os
+
+          available_accounts = json.loads(os.environ["AVAILABLE_ACCOUNTS"])
+          active_accounts    = json.loads(os.environ["ACTIVE_ACCOUNTS"])
+          target_ous         = json.loads(os.environ["TARGET_OUS"])
+          dry_run            = os.environ["DRY_RUN"] == "true"
+
+          # Option format: "Name | ID" — ID is parsed back out by the workflow
+          pool_options = (
+              [f"{a['name']} | {a['id']}" for a in available_accounts]
+              or ["No available accounts — check pool OU tags (Status=Available)"]
+          )
+          active_options = (
+              [f"{a['name']} | {a['id']}" for a in active_accounts]
+              or ["No active accounts in the active OU"]
+          )
+          ou_options = (
+              [f"{o['name']} | {o['id']}" for o in target_ous]
+              or ["No OUs found — check AWS Organizations root"]
+          )
+
+          def update_template(path, field_updates):
+              with open(path, "r") as f:
+                  template = yaml.safe_load(f)
+              for field in template.get("body", []):
+                  field_id = field.get("id")
+                  if field_id in field_updates:
+                      field["attributes"]["options"] = field_updates[field_id]
+              if dry_run:
+                  print(f"\n=== DRY RUN: {path} ===")
+                  print(yaml.dump(template, default_flow_style=False, allow_unicode=True, sort_keys=False))
+              else:
+                  with open(path, "w") as f:
+                      yaml.dump(template, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+          update_template(
+              ".github/ISSUE_TEMPLATE/aws-account-request.yml",
+              {"pool_account": pool_options, "target_ou": ou_options},
+          )
+          update_template(
+              ".github/ISSUE_TEMPLATE/aws-account-deprovision.yml",
+              {"active_account": active_options},
+          )
+          print("Done.")
+          EOF
+
+      - name: Check for changes
+        id: git_status
+        run: |
+          git diff --quiet .github/ISSUE_TEMPLATE/ && echo "changed=false" >> $GITHUB_OUTPUT || echo "changed=true" >> $GITHUB_OUTPUT
+
+      - name: Commit and push updated templates
+        if: steps.git_status.outputs.changed == 'true' && (github.event.inputs.dry_run || 'false') == 'false'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .github/ISSUE_TEMPLATE/aws-account-request.yml
+          git add .github/ISSUE_TEMPLATE/aws-account-deprovision.yml
+          git commit -m "chore: refresh issue template dropdowns with current AWS state"
+          git push origin HEAD
+
+      - name: No changes detected
+        if: steps.git_status.outputs.changed == 'false'
+        run: echo "Issue templates are already up-to-date — no commit needed."

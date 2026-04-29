@@ -7,14 +7,19 @@ body:
     attributes:
       value: |
         ## AWS Account Deprovisioning Request
-        Use this form to return a simulated lab account to the pool.
 
-  - type: input
-    id: account_id
+        **Before submitting:** run the [Refresh Issue Templates](../../actions/workflows/refresh-issue-templates.yml)
+        workflow so the dropdown below reflects currently active accounts.
+
+  - type: dropdown
+    id: active_account
     attributes:
-      label: Account ID
-      description: The 12-digit AWS account ID to deprovision
-      placeholder: "123456789012"
+      label: Account to Deprovision
+      description: >
+        Select the active lab account to return to the pool.
+        Run the "Refresh Issue Templates" workflow to populate with currently assigned accounts.
+      options:
+        - Run 'Refresh Issue Templates' workflow to populate this list
     validations:
       required: true
 

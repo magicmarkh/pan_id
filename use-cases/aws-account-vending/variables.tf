@@ -25,9 +25,8 @@ variable "owner_team" {
   type        = string
 }
 
-variable "cyberark_token" {
-  description = "OAuth2 access token from CyberArk Identity"
+variable "target_ou_id" {
+  description = "Organizational Unit ID where the account will be placed (optional)"
   type        = string
-  sensitive   = true
   default     = ""
 }
