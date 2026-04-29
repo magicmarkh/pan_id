@@ -49,13 +49,11 @@ module "cyberark_auth" {
 module "aws_account" {
   source = "../../modules/aws-account"
 
-  account_name  = var.account_name
-  account_email = var.account_email
-  environment   = var.environment
-  owner_team    = var.owner_team
-
-  # Use authentication from CyberArk
-  # depends_on = [module.cyberark_auth]
+  account_name           = var.account_name
+  account_email          = var.account_email
+  environment            = var.environment
+  owner_team             = var.owner_team
+  organizational_unit_id = var.target_ou_id
 
   tags = {
     ProvisionedBy = "GitHubActions"
