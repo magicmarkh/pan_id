@@ -18,10 +18,13 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       mode: ${{ steps.parse.outputs.issueparser_mode }}
+      pool_account: ${{ steps.parse.outputs.issueparser_pool_account }}
       account_name: ${{ steps.parse.outputs.issueparser_account_name }}
-      account_email: ${{ steps.generate_email.outputs.account_email }}
+      target_ou: ${{ steps.parse.outputs.issueparser_target_ou }}
       environment: ${{ steps.parse.outputs.issueparser_environment }}
       owner_team: ${{ steps.parse.outputs.issueparser_owner_team }}
+      account_email: ${{ steps.generate_email.outputs.account_email }}
+      requester: ${{ github.event.issue.user.login }}
 
     steps:
       - name: Checkout repository
@@ -43,9 +46,13 @@ jobs:
 
       - name: Show parsed data
         run: |
+          echo "Mode:         ${{ steps.parse.outputs.issueparser_mode }}"
+          echo "Pool Account: ${{ steps.parse.outputs.issueparser_pool_account }}"
           echo "Account Name: ${{ steps.parse.outputs.issueparser_account_name }}"
-          echo "Environment: ${{ steps.parse.outputs.issueparser_environment }}"
-          echo "Owner Team: ${{ steps.parse.outputs.issueparser_owner_team }}"
+          echo "Target OU:    ${{ steps.parse.outputs.issueparser_target_ou }}"
+          echo "Environment:  ${{ steps.parse.outputs.issueparser_environment }}"
+          echo "Owner Team:   ${{ steps.parse.outputs.issueparser_owner_team }}"
+          echo "Requester:    ${{ github.event.issue.user.login }}"
 
   provision-account:
     needs: parse-request
@@ -63,72 +70,50 @@ jobs:
           aws-region: us-east-1
           role-session-name: GitHubActions-AccountVending-${{ github.run_id }}
 
-      - name: Check for duplicate account name
-        if: needs.parse-request.outputs.mode == 'Create'
-        id: duplicate_check
-        run: |
-          ACCOUNT_NAME="${{ needs.parse-request.outputs.account_name }}"
-          EXISTING=$(aws organizations list-accounts \
-            --query "Accounts[?Name=='${ACCOUNT_NAME}'].Id" \
-            --output text)
+      # ── Simulate mode ────────────────────────────────────────────────────────
 
-          if [ -n "$EXISTING" ]; then
-            echo "❌ An AWS account named '${ACCOUNT_NAME}' already exists (ID: ${EXISTING})"
-            echo "duplicate=true" >> $GITHUB_OUTPUT
-            exit 1
-          fi
-
-          echo "✅ Account name '${ACCOUNT_NAME}' is available"
-          echo "duplicate=false" >> $GITHUB_OUTPUT
-
-      - name: Find available pool account
+      - name: Validate pool account selection (Simulate)
         if: needs.parse-request.outputs.mode == 'Simulate'
-        id: find_account
         run: |
-          POOL_OU_ID="${{ secrets.AWS_POOL_OU_ID }}"
-
-          # List all accounts in the pool OU
-          ACCOUNTS=$(aws organizations list-accounts-for-parent \
-            --parent-id "$POOL_OU_ID" \
-            --query 'Accounts[?Status==`ACTIVE`].Id' \
-            --output text)
-
-          if [ -z "$ACCOUNTS" ]; then
-            echo "❌ No accounts found in pool OU"
+          SELECTION="${{ needs.parse-request.outputs.pool_account }}"
+          if [[ "$SELECTION" == *"Refresh Issue Templates"* || -z "$SELECTION" ]]; then
+            echo "❌ No pool account selected. Please run the 'Refresh Issue Templates' workflow"
+            echo "   and re-submit after choosing an available account from the dropdown."
             exit 1
           fi
+          echo "✅ Pool account selection: $SELECTION"
 
-          # Find first account tagged Status=Available
-          ASSIGNED=""
-          for ACCOUNT_ID in $ACCOUNTS; do
-            STATUS=$(aws organizations list-tags-for-resource \
-              --resource-id "$ACCOUNT_ID" \
-              --query "Tags[?Key=='Status'].Value" \
-              --output text)
+      - name: Parse selected pool account ID (Simulate)
+        if: needs.parse-request.outputs.mode == 'Simulate'
+        id: parse_pool_account
+        run: |
+          # Dropdown format: "Account Name | 123456789012"
+          SELECTION="${{ needs.parse-request.outputs.pool_account }}"
+          ACCOUNT_ID=$(echo "$SELECTION" | awk -F' | ' '{print $NF}' | tr -d ' ')
+          echo "account_id=$ACCOUNT_ID" >> $GITHUB_OUTPUT
+          echo "Parsed account ID: $ACCOUNT_ID"
 
-            if [ "$STATUS" = "Available" ]; then
-              ASSIGNED=$ACCOUNT_ID
-              break
-            fi
-          done
-
-          if [ -z "$ASSIGNED" ]; then
-            echo "❌ No available pool accounts found. All pool accounts are in use."
-            exit 1
-          fi
-
-          echo "✅ Found available pool account: $ASSIGNED"
-          echo "account_id=$ASSIGNED" >> $GITHUB_OUTPUT
-
-      - name: Assign pool account
+      - name: Assign pool account (Simulate)
         if: needs.parse-request.outputs.mode == 'Simulate'
         id: assign_account
         run: |
-          ACCOUNT_ID="${{ steps.find_account.outputs.account_id }}"
+          ACCOUNT_ID="${{ steps.parse_pool_account.outputs.account_id }}"
           ACCOUNT_NAME="${{ needs.parse-request.outputs.account_name }}"
           ACTIVE_OU_ID="${{ secrets.AWS_ACTIVE_OU_ID }}"
           POOL_OU_ID="${{ secrets.AWS_POOL_OU_ID }}"
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          # Verify account is still available before assigning
+          STATUS=$(aws organizations list-tags-for-resource \
+            --resource-id "$ACCOUNT_ID" \
+            --query "Tags[?Key=='Status'].Value" \
+            --output text)
+
+          if [ "$STATUS" != "Available" ]; then
+            echo "❌ Account $ACCOUNT_ID is no longer available (status: $STATUS)."
+            echo "   Run 'Refresh Issue Templates' and re-submit with an available account."
+            exit 1
+          fi
 
           # Move account from pool OU to active OU
           aws organizations move-account \
@@ -144,13 +129,14 @@ jobs:
             --tags \
               Key=Status,Value=InUse \
               Key=AssignedTo,Value="$ACCOUNT_NAME" \
+              Key=AssignedBy,Value="${{ needs.parse-request.outputs.requester }}" \
               Key=AssignedAt,Value="$TIMESTAMP" \
               Key=Environment,Value="${{ needs.parse-request.outputs.environment }}" \
               Key=OwnerTeam,Value="${{ needs.parse-request.outputs.owner_team }}"
 
           echo "✅ Tagged account as InUse"
 
-          # Update account alias (requires assuming role into child account)
+          # Update account alias (best-effort — requires IAM in child account)
           ALIAS=$(echo "$ACCOUNT_NAME" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
           aws iam create-account-alias --account-alias "lab-${ALIAS}" \
             || aws iam update-account-alias --account-alias "lab-${ALIAS}" \
@@ -159,19 +145,51 @@ jobs:
           echo "account_id=$ACCOUNT_ID" >> $GITHUB_OUTPUT
           echo "account_alias=lab-${ALIAS}" >> $GITHUB_OUTPUT
 
-      - name: Setup Terraform
+      # ── Create mode ──────────────────────────────────────────────────────────
+
+      - name: Check for duplicate account name (Create)
+        if: needs.parse-request.outputs.mode == 'Create'
+        id: duplicate_check
+        run: |
+          ACCOUNT_NAME="${{ needs.parse-request.outputs.account_name }}"
+          EXISTING=$(aws organizations list-accounts \
+            --query "Accounts[?Name=='${ACCOUNT_NAME}'].Id" \
+            --output text)
+
+          if [ -n "$EXISTING" ]; then
+            echo "❌ An AWS account named '${ACCOUNT_NAME}' already exists (ID: ${EXISTING})"
+            exit 1
+          fi
+
+          echo "✅ Account name '${ACCOUNT_NAME}' is available"
+
+      - name: Parse target OU (Create)
+        if: needs.parse-request.outputs.mode == 'Create'
+        id: parse_target_ou
+        run: |
+          # Dropdown format: "OU Name | ou-xxxx-yyyyyyy"
+          SELECTION="${{ needs.parse-request.outputs.target_ou }}"
+          if [[ "$SELECTION" == *"Refresh Issue Templates"* || -z "$SELECTION" ]]; then
+            OU_ID=""
+          else
+            OU_ID=$(echo "$SELECTION" | awk -F' | ' '{print $NF}' | tr -d ' ')
+          fi
+          echo "ou_id=$OU_ID" >> $GITHUB_OUTPUT
+          echo "Target OU ID: ${OU_ID:-'(none — will use org root)'}"
+
+      - name: Setup Terraform (Create)
         if: needs.parse-request.outputs.mode == 'Create'
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.14.9"
 
-      - name: Terraform Init
+      - name: Terraform Init (Create)
         if: needs.parse-request.outputs.mode == 'Create'
         id: init
         working-directory: ./use-cases/aws-account-vending
         run: terraform init
 
-      - name: Terraform Plan
+      - name: Terraform Plan (Create)
         if: needs.parse-request.outputs.mode == 'Create'
         id: plan
         working-directory: ./use-cases/aws-account-vending
@@ -180,10 +198,16 @@ jobs:
           TF_VAR_account_email: ${{ needs.parse-request.outputs.account_email }}
           TF_VAR_environment: ${{ needs.parse-request.outputs.environment }}
           TF_VAR_owner_team: ${{ needs.parse-request.outputs.owner_team }}
-        run: |
-          terraform plan -out=tfplan -no-color
+          TF_VAR_target_ou_id: ${{ steps.parse_target_ou.outputs.ou_id }}
+          TF_VAR_requester_username: ${{ needs.parse-request.outputs.requester }}
+          TF_VAR_cyberark_tenant_url: ${{ secrets.CYBERARK_TENANT_URL }}
+          TF_VAR_cyberark_client_id: ${{ secrets.CYBERARK_CLIENT_ID }}
+          TF_VAR_cyberark_client_secret: ${{ secrets.CYBERARK_CLIENT_SECRET }}
+          TF_VAR_cyberark_auditor_group: ${{ secrets.CYBERARK_AUDITOR_GROUP }}
+          TF_VAR_cyberark_cloudops_group: ${{ secrets.CYBERARK_CLOUDOPS_GROUP }}
+        run: terraform plan -out=tfplan -no-color
 
-      - name: Comment Plan on Issue
+      - name: Comment Plan on Issue (Create)
         if: needs.parse-request.outputs.mode == 'Create'
         uses: actions/github-script@v7
         with:
@@ -208,7 +232,7 @@ jobs:
               body: output
             });
 
-      - name: Terraform Apply
+      - name: Terraform Apply (Create)
         if: needs.parse-request.outputs.mode == 'Create'
         id: apply
         working-directory: ./use-cases/aws-account-vending
@@ -217,8 +241,101 @@ jobs:
           TF_VAR_account_email: ${{ needs.parse-request.outputs.account_email }}
           TF_VAR_environment: ${{ needs.parse-request.outputs.environment }}
           TF_VAR_owner_team: ${{ needs.parse-request.outputs.owner_team }}
+          TF_VAR_target_ou_id: ${{ steps.parse_target_ou.outputs.ou_id }}
+          TF_VAR_requester_username: ${{ needs.parse-request.outputs.requester }}
+          TF_VAR_cyberark_tenant_url: ${{ secrets.CYBERARK_TENANT_URL }}
+          TF_VAR_cyberark_client_id: ${{ secrets.CYBERARK_CLIENT_ID }}
+          TF_VAR_cyberark_client_secret: ${{ secrets.CYBERARK_CLIENT_SECRET }}
+          TF_VAR_cyberark_auditor_group: ${{ secrets.CYBERARK_AUDITOR_GROUP }}
+          TF_VAR_cyberark_cloudops_group: ${{ secrets.CYBERARK_CLOUDOPS_GROUP }}
+        run: terraform apply -auto-approve tfplan
+
+      # ── CyberArk Identity — access policies (Simulate mode) ──────────────────
+      # In Create mode this is handled by the cyberark-policy Terraform module.
+      # In Simulate mode we call the CyberArk API directly via curl so we don't
+      # need a Terraform state file for a recycled pool account.
+
+      - name: Obtain CyberArk token (Simulate)
+        if: needs.parse-request.outputs.mode == 'Simulate'
+        id: cyberark_token
         run: |
-          terraform apply -auto-approve tfplan
+          RESPONSE=$(curl -s -X POST \
+            "${{ secrets.CYBERARK_TENANT_URL }}/oauth2/platformtoken" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "grant_type=client_credentials&client_id=${{ secrets.CYBERARK_CLIENT_ID }}&client_secret=${{ secrets.CYBERARK_CLIENT_SECRET }}")
+
+          TOKEN=$(echo "$RESPONSE" | jq -r '.access_token // empty')
+          if [ -z "$TOKEN" ]; then
+            echo "⚠️ Could not obtain CyberArk token — skipping policy creation (non-fatal for demo)"
+            echo "token=" >> $GITHUB_OUTPUT
+          else
+            echo "::add-mask::$TOKEN"
+            echo "token=$TOKEN" >> $GITHUB_OUTPUT
+            echo "✅ CyberArk token obtained"
+          fi
+
+      - name: Create CyberArk access roles (Simulate)
+        if: needs.parse-request.outputs.mode == 'Simulate' && steps.cyberark_token.outputs.token != ''
+        id: cyberark_roles
+        env:
+          CY_TOKEN: ${{ steps.cyberark_token.outputs.token }}
+          ACCOUNT_NAME: ${{ needs.parse-request.outputs.account_name }}
+          ACCOUNT_ID: ${{ steps.assign_account.outputs.account_id }}
+          REQUESTER: ${{ needs.parse-request.outputs.requester }}
+          ENVIRONMENT: ${{ needs.parse-request.outputs.environment }}
+          TENANT_URL: ${{ secrets.CYBERARK_TENANT_URL }}
+          AUDITOR_GROUP: ${{ secrets.CYBERARK_AUDITOR_GROUP }}
+          CLOUDOPS_GROUP: ${{ secrets.CYBERARK_CLOUDOPS_GROUP }}
+        run: |
+          BASE_URL="${TENANT_URL}/api/idadmin"
+          AUTH_HEADER="Authorization: Bearer ${CY_TOKEN}"
+
+          create_role() {
+            local ROLE_NAME="$1"
+            local DESCRIPTION="$2"
+            local RESPONSE
+            RESPONSE=$(curl -s -X POST "${BASE_URL}/Roles/StoreRole" \
+              -H "Content-Type: application/json" \
+              -H "$AUTH_HEADER" \
+              -d "{\"Name\":\"${ROLE_NAME}\",\"Description\":\"${DESCRIPTION}\"}")
+            echo "$RESPONSE" | jq -r '.Result // empty'
+          }
+
+          add_member() {
+            local ROLE_ID="$1"
+            local MEMBER="$2"   # username or group name
+            curl -s -X POST "${BASE_URL}/Roles/AddMembersToRole" \
+              -H "Content-Type: application/json" \
+              -H "$AUTH_HEADER" \
+              -d "{\"ID\":\"${ROLE_ID}\",\"Users\":[{\"MemberName\":\"${MEMBER}\"}]}" > /dev/null
+          }
+
+          POWERUSER_ID=$(create_role \
+            "aws-${ACCOUNT_NAME}-poweruser" \
+            "Power user access to AWS account ${ACCOUNT_NAME} (${ACCOUNT_ID}) — ${ENVIRONMENT}")
+
+          AUDIT_ID=$(create_role \
+            "aws-${ACCOUNT_NAME}-audit" \
+            "Read-only audit access to AWS account ${ACCOUNT_NAME} (${ACCOUNT_ID})")
+
+          ADMIN_ID=$(create_role \
+            "aws-${ACCOUNT_NAME}-cloudopsadmin" \
+            "Admin access to AWS account ${ACCOUNT_NAME} (${ACCOUNT_ID}) — cloud-ops team")
+
+          # Assign requester to PowerUser role
+          [ -n "$POWERUSER_ID" ] && [ -n "$REQUESTER" ] && add_member "$POWERUSER_ID" "$REQUESTER"
+
+          # Assign group members (best-effort — group names from secrets)
+          [ -n "$AUDIT_ID"   ] && [ -n "$AUDITOR_GROUP"  ] && add_member "$AUDIT_ID"   "$AUDITOR_GROUP"
+          [ -n "$ADMIN_ID"   ] && [ -n "$CLOUDOPS_GROUP" ] && add_member "$ADMIN_ID"   "$CLOUDOPS_GROUP"
+
+          echo "poweruser_role_id=$POWERUSER_ID" >> $GITHUB_OUTPUT
+          echo "audit_role_id=$AUDIT_ID"         >> $GITHUB_OUTPUT
+          echo "admin_role_id=$ADMIN_ID"         >> $GITHUB_OUTPUT
+
+          echo "✅ CyberArk roles created and members assigned"
+
+      # ── Success / failure comments ────────────────────────────────────────────
 
       - name: Comment Success on Issue
         if: success()
@@ -226,16 +343,29 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const mode = "${{ needs.parse-request.outputs.mode }}";
+            const mode      = "${{ needs.parse-request.outputs.mode }}";
             const isSimulate = mode === "Simulate";
 
             const accountId = isSimulate
               ? "${{ steps.assign_account.outputs.account_id }}"
-              : "Account ID will be available in Terraform outputs";
+              : "Account ID available in Terraform outputs";
 
             const modeNote = isSimulate
               ? "⚡ **Simulated** — recycled from lab pool (fast mode)"
               : "🏗️ **Real account** — provisioned via AWS Organizations";
+
+            const cyberarkSection = isSimulate
+              ? `
+            **CyberArk Access Roles Created:**
+            | Role | CyberArk Role Name | Members |
+            |---|---|---|
+            | Power User | \`aws-${{ needs.parse-request.outputs.account_name }}-poweruser\` | @${{ needs.parse-request.outputs.requester }} |
+            | Audit (Read-Only) | \`aws-${{ needs.parse-request.outputs.account_name }}-audit\` | Auditors group |
+            | Cloud Ops Admin | \`aws-${{ needs.parse-request.outputs.account_name }}-cloudopsadmin\` | Cloud-ops group |
+
+            > Access policy is defined as code — version controlled alongside the infrastructure it governs.`
+              : `
+            **CyberArk Access Roles:** Provisioned by Terraform (\`modules/cyberark-policy\`). See workflow logs for role IDs.`;
 
             const output = `### ✅ AWS Account Provisioned Successfully!
 
@@ -248,9 +378,9 @@ jobs:
             | **Account ID** | ${accountId} |
             | **Environment** | ${{ needs.parse-request.outputs.environment }} |
             | **Owner Team** | ${{ needs.parse-request.outputs.owner_team }} |
+            | **Requested By** | @${{ needs.parse-request.outputs.requester }} |
             | **Mode** | ${mode} |
-
-            The account is ready for use.`;
+            ${cyberarkSection}`;
 
             github.rest.issues.createComment({
               issue_number: context.issue.number,
@@ -283,10 +413,8 @@ jobs:
 
             There was an error provisioning the AWS account. Please review the workflow logs and try again.
 
-            **Failed Step:** ${{ job.status }}
-
-            > **Note:** If this failed due to a duplicate account name, choose a different
-            > name and submit a new issue.
+            **Tip:** If the dropdown showed stale data, run the **Refresh Issue Templates** workflow
+            and re-submit with an up-to-date selection.
 
             [View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`;
 

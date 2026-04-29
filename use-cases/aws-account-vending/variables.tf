@@ -1,5 +1,3 @@
-# AWS Account Vending - Variables
-
 variable "account_name" {
   description = "Name of the AWS account to be created"
   type        = string
@@ -25,9 +23,48 @@ variable "owner_team" {
   type        = string
 }
 
-variable "cyberark_token" {
-  description = "OAuth2 access token from CyberArk Identity"
+variable "target_ou_id" {
+  description = "Organizational Unit ID where the account will be placed (optional)"
+  type        = string
+  default     = ""
+}
+
+variable "requester_username" {
+  description = "GitHub / CyberArk Identity username of the engineer who opened the issue"
+  type        = string
+  default     = ""
+}
+
+# ── CyberArk Identity ─────────────────────────────────────────────────────────
+
+variable "cyberark_tenant_url" {
+  description = "CyberArk Identity tenant URL (e.g. https://abc1234.id.cyberark.cloud)"
+  type        = string
+  default     = ""
+}
+
+variable "cyberark_client_id" {
+  description = "OAuth2 service account client ID"
   type        = string
   sensitive   = true
+  default     = ""
+}
+
+variable "cyberark_client_secret" {
+  description = "OAuth2 service account client secret"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "cyberark_auditor_group" {
+  description = "CyberArk Identity group to assign ReadOnly audit access"
+  type        = string
+  default     = ""
+}
+
+variable "cyberark_cloudops_group" {
+  description = "CyberArk Identity group to assign Admin access"
+  type        = string
   default     = ""
 }

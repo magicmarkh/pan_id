@@ -17,7 +17,8 @@ jobs:
     if: github.event.label.name == 'deprovision-aws-account'
     runs-on: ubuntu-latest
     outputs:
-      account_id: ${{ steps.parse.outputs.issueparser_account_id }}
+      active_account: ${{ steps.parse.outputs.issueparser_active_account }}
+      account_id: ${{ steps.parse_account_id.outputs.account_id }}
       mode: ${{ steps.parse.outputs.issueparser_mode }}
 
     steps:
@@ -29,6 +30,21 @@ jobs:
         uses: stefanbuck/github-issue-parser@v3
         with:
           template-path: .github/ISSUE_TEMPLATE/aws-account-deprovision.yml
+
+      - name: Parse account ID from dropdown selection
+        id: parse_account_id
+        run: |
+          SELECTION="${{ steps.parse.outputs.issueparser_active_account }}"
+
+          if [[ "$SELECTION" == *"Refresh Issue Templates"* || -z "$SELECTION" ]]; then
+            echo "❌ No account selected. Run 'Refresh Issue Templates' and re-submit."
+            exit 1
+          fi
+
+          # Dropdown format: "Account Name | 123456789012"
+          ACCOUNT_ID=$(echo "$SELECTION" | awk -F' | ' '{print $NF}' | tr -d ' ')
+          echo "account_id=$ACCOUNT_ID" >> $GITHUB_OUTPUT
+          echo "Parsed account ID: $ACCOUNT_ID"
 
   deprovision-account:
     needs: parse-request
@@ -46,14 +62,13 @@ jobs:
           aws-region: us-east-1
           role-session-name: GitHubActions-Deprovision-${{ github.run_id }}
 
-      - name: Return account to pool
+      - name: Return account to pool (Simulate)
         if: needs.parse-request.outputs.mode == 'Simulate'
         id: return_account
         run: |
           ACCOUNT_ID="${{ needs.parse-request.outputs.account_id }}"
           POOL_OU_ID="${{ secrets.AWS_POOL_OU_ID }}"
           ACTIVE_OU_ID="${{ secrets.AWS_ACTIVE_OU_ID }}"
-          LAST4="${ACCOUNT_ID: -4}"
 
           # Move back to pool OU
           aws organizations move-account \
@@ -63,10 +78,10 @@ jobs:
 
           echo "✅ Moved account back to pool OU"
 
-          # Reset tags
+          # Reset tags — strip assignment metadata, restore Available status
           aws organizations untag-resource \
             --resource-id "$ACCOUNT_ID" \
-            --tag-keys AssignedTo AssignedAt Environment OwnerTeam
+            --tag-keys AssignedTo AssignedBy AssignedAt Environment OwnerTeam
 
           aws organizations tag-resource \
             --resource-id "$ACCOUNT_ID" \
@@ -74,12 +89,54 @@ jobs:
 
           echo "✅ Reset tags — account marked Available"
 
-          # Reset alias
-          aws iam delete-account-alias \
-            --account-alias $(aws iam list-account-aliases --query 'AccountAliases[0]' --output text) \
+          # Reset alias (best-effort)
+          CURRENT_ALIAS=$(aws iam list-account-aliases \
+            --query 'AccountAliases[0]' --output text 2>/dev/null || true)
+          [ -n "$CURRENT_ALIAS" ] && [ "$CURRENT_ALIAS" != "None" ] && \
+            aws iam delete-account-alias --account-alias "$CURRENT_ALIAS" \
             || echo "⚠️ Could not reset alias (non-fatal)"
 
           echo "✅ Deprovisioning complete"
+
+      - name: Revoke CyberArk access roles (Simulate)
+        if: needs.parse-request.outputs.mode == 'Simulate'
+        env:
+          ACCOUNT_ID: ${{ needs.parse-request.outputs.account_id }}
+          TENANT_URL: ${{ secrets.CYBERARK_TENANT_URL }}
+        run: |
+          # Obtain token
+          RESPONSE=$(curl -s -X POST \
+            "${TENANT_URL}/oauth2/platformtoken" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "grant_type=client_credentials&client_id=${{ secrets.CYBERARK_CLIENT_ID }}&client_secret=${{ secrets.CYBERARK_CLIENT_SECRET }}")
+
+          TOKEN=$(echo "$RESPONSE" | jq -r '.access_token // empty')
+          if [ -z "$TOKEN" ]; then
+            echo "⚠️ Could not obtain CyberArk token — skipping role revocation (non-fatal)"
+            exit 0
+          fi
+          echo "::add-mask::$TOKEN"
+
+          BASE_URL="${TENANT_URL}/api/idadmin"
+          AUTH_HEADER="Authorization: Bearer ${TOKEN}"
+
+          # Fetch role IDs by name pattern and delete them
+          for SUFFIX in poweruser audit cloudopsadmin; do
+            # Get role ID by name (search)
+            ROLE_NAME="aws-*-${SUFFIX}"
+            ROLES=$(curl -s -X POST "${BASE_URL}/Roles/GetRolesAndRightsForCurrentUser" \
+              -H "$AUTH_HEADER" -H "Content-Type: application/json" \
+              -d "{}" | jq -r --arg pat "aws-" '.Result[]? | select(.Name | startswith($pat)) | select(.Name | endswith("'"${SUFFIX}"'")) | .ID // empty')
+
+            for ROLE_ID in $ROLES; do
+              curl -s -X POST "${BASE_URL}/Roles/DeleteRole" \
+                -H "$AUTH_HEADER" -H "Content-Type: application/json" \
+                -d "{\"ID\":\"${ROLE_ID}\"}" > /dev/null
+              echo "✅ Deleted CyberArk role: $ROLE_ID"
+            done
+          done
+
+          echo "✅ CyberArk role cleanup complete (or no roles found)"
 
       - name: Comment Success on Issue
         if: success()
@@ -94,7 +151,10 @@ jobs:
               body: `### ✅ Account Returned to Pool
 
               Account \`${{ needs.parse-request.outputs.account_id }}\` has been
-              returned to the lab pool and is available for future demos.`
+              returned to the lab pool, tagged **Available**, and CyberArk access
+              roles have been revoked.
+
+              The account is ready for the next demo.`
             });
 
       - name: Close Issue
