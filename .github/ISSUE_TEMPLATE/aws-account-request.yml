@@ -8,7 +8,7 @@ body:
       value: |
         ## AWS Account Provisioning Request
 
-        **Before submitting:** run the [Refresh Issue Templates](../../actions/workflows/refresh-issue-templates.yml)
+        **Before submitting:** run the [Refresh Issue Templates](https://github.com/magicmarkh/pan_id/actions/workflows/refresh-issue-templates.yml)
         workflow so the dropdowns below reflect current AWS state.
 
   - type: dropdown
