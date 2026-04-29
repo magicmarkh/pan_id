@@ -62,7 +62,7 @@ jobs:
                 --query 'Account.Name' \
                 --output text)
               ENTRY=$(printf '{"id":"%s","name":"%s"}' "$ACCOUNT_ID" "$NAME")
-              AVAILABLE_JSON=$(echo "$AVAILABLE_JSON" | jq --argjson e "$ENTRY" '. + [$e]')
+              AVAILABLE_JSON=$(echo "$AVAILABLE_JSON" | jq -c --argjson e "$ENTRY" '. + [$e]')
             fi
           done
 
@@ -86,7 +86,7 @@ jobs:
               --query 'Account.Name' \
               --output text)
             ENTRY=$(printf '{"id":"%s","name":"%s"}' "$ACCOUNT_ID" "$NAME")
-            ACTIVE_JSON=$(echo "$ACTIVE_JSON" | jq --argjson e "$ENTRY" '. + [$e]')
+            ACTIVE_JSON=$(echo "$ACTIVE_JSON" | jq -c --argjson e "$ENTRY" '. + [$e]')
           done
 
           echo "active_accounts=$ACTIVE_JSON" >> $GITHUB_OUTPUT
@@ -113,7 +113,7 @@ jobs:
               --query 'OrganizationalUnit.Name' \
               --output text)
             ENTRY=$(printf '{"id":"%s","name":"%s"}' "$OU_ID" "$OU_NAME")
-            OU_JSON=$(echo "$OU_JSON" | jq --argjson e "$ENTRY" '. + [$e]')
+            OU_JSON=$(echo "$OU_JSON" | jq -c --argjson e "$ENTRY" '. + [$e]')
           done
 
           echo "target_ous=$OU_JSON" >> $GITHUB_OUTPUT
