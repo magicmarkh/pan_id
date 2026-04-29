@@ -31,18 +31,18 @@ variable "requester_username" {
   type        = string
 }
 
-variable "power_user_role_name" {
-  description = "IAM role name for power user access (pre-configured in pool accounts)"
+variable "power_user_permission_set_arn" {
+  description = "IAM Identity Center permission set ARN for power user access"
   type        = string
 }
 
-variable "audit_role_name" {
-  description = "IAM role name for audit access (pre-configured in pool accounts)"
+variable "audit_permission_set_arn" {
+  description = "IAM Identity Center permission set ARN for audit read-only access"
   type        = string
 }
 
-variable "cloudops_role_name" {
-  description = "IAM role name for cloud ops admin access (pre-configured in pool accounts)"
+variable "cloudops_permission_set_arn" {
+  description = "IAM Identity Center permission set ARN for cloud ops admin access"
   type        = string
 }
 

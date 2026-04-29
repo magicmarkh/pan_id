@@ -13,18 +13,18 @@ variable "requester_username" {
   type        = string
 }
 
-variable "power_user_role_arn" {
-  description = "IAM role ARN for power user access in the account"
+variable "power_user_permission_set_arn" {
+  description = "IAM Identity Center permission set ARN for power user access"
   type        = string
 }
 
-variable "audit_role_arn" {
-  description = "IAM role ARN for read-only audit access in the account"
+variable "audit_permission_set_arn" {
+  description = "IAM Identity Center permission set ARN for read-only audit access"
   type        = string
 }
 
-variable "cloudops_role_arn" {
-  description = "IAM role ARN for admin access in the account"
+variable "cloudops_permission_set_arn" {
+  description = "IAM Identity Center permission set ARN for admin access"
   type        = string
 }
 

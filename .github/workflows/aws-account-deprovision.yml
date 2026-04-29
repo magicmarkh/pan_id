@@ -132,9 +132,9 @@ jobs:
           TF_VAR_account_id: ${{ needs.parse-request.outputs.account_id }}
           TF_VAR_account_name: ${{ steps.parse_account_name.outputs.account_name }}
           TF_VAR_requester_username: placeholder
-          TF_VAR_power_user_role_name: ${{ secrets.SCA_POWER_USER_ROLE_NAME }}
-          TF_VAR_audit_role_name: ${{ secrets.SCA_AUDIT_ROLE_NAME }}
-          TF_VAR_cloudops_role_name: ${{ secrets.SCA_CLOUDOPS_ROLE_NAME }}
+          TF_VAR_power_user_permission_set_arn: ${{ secrets.SCA_POWER_USER_PERMISSION_SET_ARN }}
+          TF_VAR_audit_permission_set_arn: ${{ secrets.SCA_AUDIT_PERMISSION_SET_ARN }}
+          TF_VAR_cloudops_permission_set_arn: ${{ secrets.SCA_CLOUDOPS_PERMISSION_SET_ARN }}
           TF_VAR_audit_group_name: ${{ secrets.SCA_AUDIT_GROUP_NAME }}
           TF_VAR_cloudops_group_name: ${{ secrets.SCA_CLOUDOPS_GROUP_NAME }}
         run: terraform destroy -auto-approve -no-color

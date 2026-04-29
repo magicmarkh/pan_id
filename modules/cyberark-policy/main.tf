@@ -20,7 +20,7 @@ resource "idsec_policy_cloud_access" "power_user" {
   targets = {
     aws_account_targets = [
       {
-        role_id      = var.power_user_role_arn
+        role_id      = var.power_user_permission_set_arn
         workspace_id = var.account_id
       }
     ]
@@ -57,7 +57,7 @@ resource "idsec_policy_cloud_access" "audit" {
   targets = {
     aws_account_targets = [
       {
-        role_id      = var.audit_role_arn
+        role_id      = var.audit_permission_set_arn
         workspace_id = var.account_id
       }
     ]
@@ -94,7 +94,7 @@ resource "idsec_policy_cloud_access" "cloudops" {
   targets = {
     aws_account_targets = [
       {
-        role_id      = var.cloudops_role_arn
+        role_id      = var.cloudops_permission_set_arn
         workspace_id = var.account_id
       }
     ]

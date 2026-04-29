@@ -366,9 +366,9 @@ jobs:
           TF_VAR_account_id: ${{ needs.provision-account.outputs.account_id }}
           TF_VAR_account_name: ${{ needs.parse-request.outputs.account_name }}
           TF_VAR_requester_username: ${{ needs.parse-request.outputs.requester }}
-          TF_VAR_power_user_role_name: ${{ secrets.SCA_POWER_USER_ROLE_NAME }}
-          TF_VAR_audit_role_name: ${{ secrets.SCA_AUDIT_ROLE_NAME }}
-          TF_VAR_cloudops_role_name: ${{ secrets.SCA_CLOUDOPS_ROLE_NAME }}
+          TF_VAR_power_user_permission_set_arn: ${{ secrets.SCA_POWER_USER_PERMISSION_SET_ARN }}
+          TF_VAR_audit_permission_set_arn: ${{ secrets.SCA_AUDIT_PERMISSION_SET_ARN }}
+          TF_VAR_cloudops_permission_set_arn: ${{ secrets.SCA_CLOUDOPS_PERMISSION_SET_ARN }}
           TF_VAR_audit_group_name: ${{ secrets.SCA_AUDIT_GROUP_NAME }}
           TF_VAR_cloudops_group_name: ${{ secrets.SCA_CLOUDOPS_GROUP_NAME }}
         run: terraform apply -auto-approve -no-color
@@ -396,11 +396,11 @@ jobs:
 
               Access policies have been created in CyberArk Identity for account \`${{ needs.provision-account.outputs.account_id }}\`:
 
-              | Policy | IAM Role | Principals |
-              |---|---|---|
-              | **PowerUser** | \`${{ secrets.SCA_POWER_USER_ROLE_NAME }}\` | @${{ needs.parse-request.outputs.requester }} |
-              | **Audit** | \`${{ secrets.SCA_AUDIT_ROLE_NAME }}\` | ${{ secrets.SCA_AUDIT_GROUP_NAME }} (group) |
-              | **CloudOps** | \`${{ secrets.SCA_CLOUDOPS_ROLE_NAME }}\` | ${{ secrets.SCA_CLOUDOPS_GROUP_NAME }} (group) |
+              | Policy | Principals |
+              |---|---|
+              | **PowerUser** | @${{ needs.parse-request.outputs.requester }} |
+              | **Audit** | ${{ secrets.SCA_AUDIT_GROUP_NAME }} (group) |
+              | **CloudOps** | ${{ secrets.SCA_CLOUDOPS_GROUP_NAME }} (group) |
 
               Access is available via CyberArk Secure Cloud Access. Sessions limited to 1 hour, Mon–Fri 08:00–18:00 UTC.`
             });
