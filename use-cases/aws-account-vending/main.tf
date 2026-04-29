@@ -1,15 +1,23 @@
-# AWS Account Vending - Root Configuration
+# AWS Account Vending — Root Configuration
 #
-# This is the root Terraform configuration that orchestrates AWS account
-# provisioning using CyberArk Identity authentication.
+# Orchestrates: account creation → IAM access roles → CyberArk Identity policies
+# All three layers are defined as code so access governance lives alongside
+# the infrastructure it governs.
+#
+# TODO: Replace cyberark-policy module with Secure Cloud Access (SCA) resources
+#       once the correct idsec provider resource types are confirmed.
 
 terraform {
-  required_version = ">= 1.6.0"
+  required_version = ">= 1.7.0"
 
   required_providers {
     aws = {
       source  = "hashicorp/aws"
       version = "~> 5.0"
+    }
+    idsec = {
+      source  = "cyberark/idsec"
+      version = "~> 1.0"
     }
   }
 
@@ -23,8 +31,8 @@ terraform {
   # }
 }
 
-# Configure AWS Provider
-# Assumes credentials are provided via environment or IAM role
+# ── Providers ─────────────────────────────────────────────────────────────────
+
 provider "aws" {
   region = "us-east-1"
 
@@ -38,14 +46,14 @@ provider "aws" {
   }
 }
 
-# Authenticate with CyberArk Identity
-module "cyberark_auth" {
-  source = "../../modules/cyberark-auth"
-
-  cyberark_token = var.cyberark_token
+provider "idsec" {
+  tenant_url    = var.cyberark_tenant_url
+  client_id     = var.cyberark_client_id
+  client_secret = var.cyberark_client_secret
 }
 
-# Provision AWS Account
+# ── AWS Account ───────────────────────────────────────────────────────────────
+
 module "aws_account" {
   source = "../../modules/aws-account"
 
@@ -54,27 +62,44 @@ module "aws_account" {
   environment   = var.environment
   owner_team    = var.owner_team
 
-  # Use authentication from CyberArk
-  # depends_on = [module.cyberark_auth]
-
   tags = {
-    ProvisionedBy = "GitHubActions"
-    Timestamp     = timestamp()
+    ProvisionedBy   = "GitHubActions"
+    RequesterGitHub = var.requester_username
+    Timestamp       = timestamp()
   }
 }
 
-# Configure IAM Policies and Roles
+# ── IAM Cross-Account Access Roles ───────────────────────────────────────────
+
 module "aws_iam_policies" {
   source = "../../modules/aws-iam-policies"
 
-  account_id  = module.aws_account.account_id
-  environment = var.environment
-  owner_team  = var.owner_team
+  account_id            = module.aws_account.account_id
+  account_name          = var.account_name
+  environment           = var.environment
+  owner_team            = var.owner_team
+  management_account_id = data.aws_caller_identity.current.account_id
+  require_mfa           = var.environment == "prod"
 
-  create_admin_role     = true
-  create_developer_role = true
-  create_readonly_role  = true
-  require_mfa           = var.environment == "prod" ? true : false
-
-  # depends_on = [module.aws_account]
+  depends_on = [module.aws_account]
 }
+
+# ── CyberArk Identity Access Policies ────────────────────────────────────────
+# TODO: Replace with SCA-native resources — idsec_role is a placeholder.
+
+module "cyberark_policy" {
+  source = "../../modules/cyberark-policy"
+
+  account_id         = module.aws_account.account_id
+  account_name       = var.account_name
+  environment        = var.environment
+  requester_username = var.requester_username
+  auditor_group      = var.cyberark_auditor_group
+  cloudops_group     = var.cyberark_cloudops_group
+
+  depends_on = [module.aws_account]
+}
+
+# ── Data sources ──────────────────────────────────────────────────────────────
+
+data "aws_caller_identity" "current" {}
