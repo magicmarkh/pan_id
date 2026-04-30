@@ -4,7 +4,7 @@
 # provisioning using CyberArk Identity authentication.
 
 terraform {
-  required_version = ">= 1.6.0"
+  required_version = ">= 1.7.0"
 
   required_providers {
     aws = {
@@ -23,8 +23,6 @@ terraform {
   # }
 }
 
-# Configure AWS Provider
-# Assumes credentials are provided via environment or IAM role
 provider "aws" {
   region = "us-east-1"
 
@@ -38,14 +36,6 @@ provider "aws" {
   }
 }
 
-# Authenticate with CyberArk Identity
-module "cyberark_auth" {
-  source = "../../modules/cyberark-auth"
-
-  cyberark_token = var.cyberark_token
-}
-
-# Provision AWS Account
 module "aws_account" {
   source = "../../modules/aws-account"
 
@@ -59,20 +49,4 @@ module "aws_account" {
     ProvisionedBy = "GitHubActions"
     Timestamp     = timestamp()
   }
-}
-
-# Configure IAM Policies and Roles
-module "aws_iam_policies" {
-  source = "../../modules/aws-iam-policies"
-
-  account_id  = module.aws_account.account_id
-  environment = var.environment
-  owner_team  = var.owner_team
-
-  create_admin_role     = true
-  create_developer_role = true
-  create_readonly_role  = true
-  require_mfa           = var.environment == "prod" ? true : false
-
-  # depends_on = [module.aws_account]
 }
