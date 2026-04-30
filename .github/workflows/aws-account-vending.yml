@@ -342,52 +342,28 @@ jobs:
         working-directory: ./use-cases/cyberark-sca-policy
         run: terraform init
 
-      - name: Diagnose CyberArk platform discovery
+      - name: Validate CyberArk tenant reachability
         env:
           SUBDOMAIN: ${{ secrets.CYBERARK_SUBDOMAIN }}
         run: |
-          # The idsec provider masks its discovery URL, so probe the same
-          # endpoint manually to confirm what the provider sees.
           if [ -z "$SUBDOMAIN" ]; then
             echo "❌ CYBERARK_SUBDOMAIN secret is empty"
             exit 1
           fi
-
-          # Detect common mistakes without leaking the value
-          LEN=${#SUBDOMAIN}
-          echo "Subdomain length: $LEN characters"
-
           case "$SUBDOMAIN" in
-            http://*|https://*)
-              echo "❌ CYBERARK_SUBDOMAIN looks like a URL — must be just the prefix (e.g. 'abc1234')"
-              exit 1 ;;
-            *.*)
-              echo "❌ CYBERARK_SUBDOMAIN contains a dot — must be just the prefix, not 'abc1234.id.cyberark.cloud'"
-              exit 1 ;;
-            *" "*|*$'\t'*|*$'\n'*|*$'\r'*)
-              echo "❌ CYBERARK_SUBDOMAIN contains whitespace"
+            http://*|https://*|*.*|*" "*|*$'\t'*|*$'\n'*|*$'\r'*)
+              echo "❌ CYBERARK_SUBDOMAIN must be just the tenant prefix (e.g. 'abc1234'), no scheme/dots/whitespace"
               exit 1 ;;
           esac
 
-          DISCOVERY_URL="https://platform-discovery.cyberark.cloud/api/v2/services/subdomain/${SUBDOMAIN}"
-          # Mask the subdomain in the URL we print, but keep the host visible
-          MASKED_URL="https://platform-discovery.cyberark.cloud/api/v2/services/subdomain/<SUBDOMAIN:${LEN}chars>"
-          echo "Probing: $MASKED_URL"
-
-          HTTP_CODE=$(curl -s -o /tmp/discovery.json -w "%{http_code}" "$DISCOVERY_URL" || echo "curl_failed")
-          echo "Discovery HTTP status: $HTTP_CODE"
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "✅ Tenant resolves — provider auth should succeed"
-          elif [ "$HTTP_CODE" = "404" ]; then
-            echo "❌ 404 — tenant subdomain is not recognized by CyberArk."
-            echo "   Confirm the value of CYBERARK_SUBDOMAIN matches the prefix of your tenant URL."
-            echo "   Example: tenant URL https://abc1234.id.cyberark.cloud → CYBERARK_SUBDOMAIN=abc1234"
-            exit 1
-          else
-            echo "⚠️ Unexpected HTTP status $HTTP_CODE"
-            cat /tmp/discovery.json 2>/dev/null || true
-            exit 1
-          fi
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "https://${SUBDOMAIN}.id.cyberark.cloud/")
+          echo "Tenant host HTTP status: $HTTP_CODE"
+          case "$HTTP_CODE" in
+            2*|3*) echo "✅ Tenant host reachable" ;;
+            *)
+              echo "❌ Tenant https://<SUBDOMAIN>.id.cyberark.cloud/ unreachable (HTTP $HTTP_CODE)"
+              exit 1 ;;
+          esac
 
       - name: Terraform Apply (SCA Policies)
         id: sca_apply
