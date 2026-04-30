@@ -20,7 +20,7 @@ locals {
 resource "idsec_policy_cloud_access" "power_user" {
   metadata = {
     name        = "aws-${var.account_name}-poweruser"
-    description = "Power user access to ${var.account_name} (${var.account_id})"
+    description = "Power user access to ${var.account_name} [${var.account_id}]"
     status = {
       status = "Active"
     }
@@ -57,7 +57,7 @@ resource "idsec_policy_cloud_access" "power_user" {
 resource "idsec_policy_cloud_access" "audit" {
   metadata = {
     name        = "aws-${var.account_name}-audit"
-    description = "Read-only audit access to ${var.account_name} (${var.account_id})"
+    description = "Read-only audit access to ${var.account_name} [${var.account_id}]"
     status = {
       status = "Active"
     }
@@ -94,7 +94,7 @@ resource "idsec_policy_cloud_access" "audit" {
 resource "idsec_policy_cloud_access" "cloudops" {
   metadata = {
     name        = "aws-${var.account_name}-cloudops"
-    description = "Cloud ops admin access to ${var.account_name} (${var.account_id})"
+    description = "Cloud ops admin access to ${var.account_name} [${var.account_id}]"
     status = {
       status = "Active"
     }
