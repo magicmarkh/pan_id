@@ -25,7 +25,6 @@ body:
       '
     options:
     - test-1 | 900360460826
-    - sandbox 1 | 396913732694
     - sandbox 3 | 588738594421
     - jde-idc-dev | 128327517575
     - jde-idc-prod | 597088054319
