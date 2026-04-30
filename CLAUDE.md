@@ -107,8 +107,8 @@ pan_id/
 | `SCA_POWER_USER_PERMISSION_SET_ARN` | IAM Identity Center permission set ARN for power user access |
 | `SCA_AUDIT_PERMISSION_SET_ARN` | IAM Identity Center permission set ARN for audit read-only |
 | `SCA_CLOUDOPS_PERMISSION_SET_ARN` | IAM Identity Center permission set ARN for cloud ops admin |
-| `SCA_AUDIT_GROUP_NAME` | CyberArk group name for auditors |
-| `SCA_CLOUDOPS_GROUP_NAME` | CyberArk group name for cloud ops |
+| `CYBERARK_AUDITOR_GROUP` | CyberArk group name for auditors |
+| `CYBERARK_CLOUDOPS_GROUP` | CyberArk group name for cloud ops |
 
 ## GitHub Environment Required
 - Environment name: `production`
