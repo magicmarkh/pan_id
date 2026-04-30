@@ -90,6 +90,7 @@ pan_id/
 | `AWS_MANAGEMENT_ACCOUNT_ID` | 12-digit management account ID (used to construct IAM role ARNs) |
 | `AWS_POOL_OU_ID` | OU ID containing pre-staged lab accounts |
 | `AWS_ACTIVE_OU_ID` | OU ID where assigned/active accounts live |
+| `AWS_UNUSED_OU_ID` | OU ID for unprovisioned/unconfigured accounts (excluded from deprovision dropdown) |
 | `SCA_POWER_USER_PERMISSION_SET_ARN` | IAM Identity Center permission set ARN for power user access |
 | `SCA_AUDIT_PERMISSION_SET_ARN` | IAM Identity Center permission set ARN for audit read-only |
 | `SCA_CLOUDOPS_PERMISSION_SET_ARN` | IAM Identity Center permission set ARN for cloud ops admin |

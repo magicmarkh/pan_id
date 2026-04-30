@@ -80,6 +80,13 @@ jobs:
         id: active_accounts
         run: |
           MGMT_ACCOUNT_ID="${{ secrets.AWS_MANAGEMENT_ACCOUNT_ID }}"
+          UNUSED_OU_ID="${{ secrets.AWS_UNUSED_OU_ID }}"
+
+          # Build exclusion set from the Unused OU (accounts not yet configured)
+          UNUSED_IDS=$(aws organizations list-accounts-for-parent \
+            --parent-id "$UNUSED_OU_ID" \
+            --query 'Accounts[*].Id' \
+            --output text | tr '\t' '\n')
 
           ACCOUNT_IDS=$(aws organizations list-accounts \
             --query 'Accounts[?Status==`ACTIVE`].Id' \
@@ -87,8 +94,13 @@ jobs:
 
           ACTIVE_JSON="[]"
           for ACCOUNT_ID in $ACCOUNT_IDS; do
-            # Never offer the management account for deprovisioning
+            # Skip management account
             if [ "$ACCOUNT_ID" = "$MGMT_ACCOUNT_ID" ]; then
+              continue
+            fi
+
+            # Skip accounts sitting in the Unused OU
+            if echo "$UNUSED_IDS" | grep -qx "$ACCOUNT_ID"; then
               continue
             fi
 
