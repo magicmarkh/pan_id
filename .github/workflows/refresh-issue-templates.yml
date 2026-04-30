@@ -101,33 +101,6 @@ jobs:
           echo "active_accounts=$ACTIVE_JSON" >> $GITHUB_OUTPUT
           echo "Found $(echo "$ACTIVE_JSON" | jq length) deprovisionable accounts in active OU"
 
-      - name: Query available target OUs
-        id: target_ous
-        run: |
-          # Find root of the organization
-          ROOT_ID=$(aws organizations list-roots \
-            --query 'Roots[0].Id' \
-            --output text)
-
-          # List direct child OUs of the root
-          OU_IDS=$(aws organizations list-organizational-units-for-parent \
-            --parent-id "$ROOT_ID" \
-            --query 'OrganizationalUnits[].Id' \
-            --output text)
-
-          OU_JSON="[]"
-          for OU_ID in $OU_IDS; do
-            OU_NAME=$(aws organizations describe-organizational-unit \
-              --organizational-unit-id "$OU_ID" \
-              --query 'OrganizationalUnit.Name' \
-              --output text)
-            ENTRY=$(printf '{"id":"%s","name":"%s"}' "$OU_ID" "$OU_NAME")
-            OU_JSON=$(echo "$OU_JSON" | jq -c --argjson e "$ENTRY" '. + [$e]')
-          done
-
-          echo "target_ous=$OU_JSON" >> $GITHUB_OUTPUT
-          echo "Found $(echo "$OU_JSON" | jq length) OUs"
-
       - name: Install PyYAML
         run: pip install pyyaml --quiet
 
@@ -136,7 +109,6 @@ jobs:
         env:
           AVAILABLE_ACCOUNTS: ${{ steps.pool_accounts.outputs.available_accounts }}
           ACTIVE_ACCOUNTS: ${{ steps.active_accounts.outputs.active_accounts }}
-          TARGET_OUS: ${{ steps.target_ous.outputs.target_ous }}
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
         run: |
           python3 << 'EOF'
@@ -146,7 +118,6 @@ jobs:
 
           available_accounts = json.loads(os.environ["AVAILABLE_ACCOUNTS"])
           active_accounts    = json.loads(os.environ["ACTIVE_ACCOUNTS"])
-          target_ous         = json.loads(os.environ["TARGET_OUS"])
           dry_run            = os.environ["DRY_RUN"] == "true"
 
           # Option format: "Name | ID" — ID is parsed back out by the workflow
@@ -157,10 +128,6 @@ jobs:
           active_options = (
               [f"{a['name']} | {a['id']}" for a in active_accounts]
               or ["No accounts found — check AWS Organizations"]
-          )
-          ou_options = (
-              [f"{o['name']} | {o['id']}" for o in target_ous]
-              or ["No OUs found — check AWS Organizations root"]
           )
 
           def update_template(path, field_updates):
@@ -179,7 +146,7 @@ jobs:
 
           update_template(
               ".github/ISSUE_TEMPLATE/aws-account-request.yml",
-              {"pool_account": pool_options, "target_ou": ou_options},
+              {"pool_account": pool_options},
           )
           update_template(
               ".github/ISSUE_TEMPLATE/aws-account-deprovision.yml",

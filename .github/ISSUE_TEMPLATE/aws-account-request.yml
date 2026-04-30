@@ -31,9 +31,8 @@ body:
   id: pool_account
   attributes:
     label: Available Lab Account (Simulate mode only)
-    description: 'Select a pool account to assign. Only used when Provisioning Mode
-      = Simulate. Run the "Refresh Issue Templates" workflow to populate with current
-      available accounts.
+    description: 'Select a pool account to assign. Run the "Refresh Issue Templates"
+      workflow to populate with current available accounts.
 
       '
     options:
@@ -45,50 +44,10 @@ body:
   id: account_name
   attributes:
     label: Account Name / Label
-    description: 'A label for this account assignment (Simulate) or the actual AWS
-      account name (Create). Alphanumeric and hyphens only.
+    description: 'A label for this account (Simulate) or the AWS account name (Create).
+      Alphanumeric and hyphens only.
 
       '
     placeholder: my-application-prod
-  validations:
-    required: true
-- type: dropdown
-  id: target_ou
-  attributes:
-    label: Target Organizational Unit (Create mode only)
-    description: 'OU where the new account will be placed. Only used when Provisioning
-      Mode = Create. Run the "Refresh Issue Templates" workflow to populate with current
-      OUs.
-
-      '
-    options:
-    - Production | ou-lq9x-50uk5d5c
-    - Sandbox | ou-lq9x-5svgxsqy
-    - Unused | ou-lq9x-6aumntl4
-    - Management | ou-lq9x-7wimdqgx
-    - Delegated Admin | ou-lq9x-99xs8wky
-    - Dev | ou-lq9x-f4uh5zcs
-  validations:
-    required: false
-- type: dropdown
-  id: environment
-  attributes:
-    label: Environment
-    description: Select the environment type for this account
-    options:
-    - dev
-    - staging
-    - prod
-  validations:
-    required: true
-- type: dropdown
-  id: owner_team
-  attributes:
-    label: Owner Team
-    description: Team or group responsible for this account
-    options:
-    - platform-engineering
-    - app-dev
-    - security-ops
   validations:
     required: true

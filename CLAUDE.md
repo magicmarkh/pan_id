@@ -34,10 +34,10 @@ GitHub Issue Form (multi-select) → GitHub Actions → [production gate]
 
 ### 2. CyberArk SCA Policies (`use-cases/cyberark-sca-policy/`)
 - **Not triggered directly** — invoked by the vending and deprovisioning workflows
-- Creates three `idsec_policy_cloud_access` resources per account:
-  - `PowerUser` — requester (GitHub issue opener), targets PowerUser permission set
-  - `Audit` — auditors CyberArk group, targets Audit permission set
-  - `CloudOps` — cloud-ops CyberArk group, targets CloudOps permission set
+- Creates three `idsec_policy_cloud_access` resources per account, all using GROUP principals:
+  - `PowerUser` — `CYBERARK_POWERUSER_GROUP` group, targets PowerUser permission set
+  - `Audit` — `CYBERARK_AUDITOR_GROUP` group, targets Audit permission set
+  - `CloudOps` — `CYBERARK_CLOUDOPS_GROUP` group, targets CloudOps permission set
 - All policies: `Recurring`, Mon-Fri 08:00–18:00 UTC, 1 hour max session
 - Terraform state stored as GitHub Actions artifact `sca-tfstate-{account_id}` (90 days)
 
@@ -59,6 +59,7 @@ GitHub Issue Form (multi-select) → GitHub Actions → [production gate]
 
 ## Key Design Decisions (Already Made — Do Not Revisit Unless Asked)
 - **CyberArk SCA auth:** OAuth2 confidential client (`service_user` / `service_token`) via idsec Terraform provider; tenant identified by `subdomain` only (not full URL). The `subdomain` value must be the ISP tenant *name* (prefix of `<name>.cyberark.cloud`), NOT the underlying Identity tenant ID (prefix of `<id>.id.cyberark.cloud`). The provider resolves all service endpoints via `platform-discovery.cyberark.cloud/api/v2/services/subdomain/<name>`.
+- **SCA policy principals:** All three policies (PowerUser, Audit, CloudOps) use GROUP principals. Per-user (USER) principals were dropped because GitHub usernames are not federated with the CyberArk Identity tenant. Add demo users to the relevant CyberArk groups instead of federating.
 - **AWS credential flow:** GitHub OIDC → `GitHubActionsOrgProvisioner` IAM role — no static AWS keys
 - **Approval gate:** GitHub Environments (`environment: production`) on every destructive job
 - **Issue parsing:** `stefanbuck/github-issue-parser@v3` maps issue form fields to job outputs
@@ -106,6 +107,7 @@ pan_id/
 | `SCA_POWER_USER_PERMISSION_SET_ARN` | IAM Identity Center permission set ARN for power user access |
 | `SCA_AUDIT_PERMISSION_SET_ARN` | IAM Identity Center permission set ARN for audit read-only |
 | `SCA_CLOUDOPS_PERMISSION_SET_ARN` | IAM Identity Center permission set ARN for cloud ops admin |
+| `CYBERARK_POWERUSER_GROUP` | CyberArk group name for power user access — all three SCA policies now use groups, not individual users |
 | `CYBERARK_AUDITOR_GROUP` | CyberArk group name for auditors |
 | `CYBERARK_CLOUDOPS_GROUP` | CyberArk group name for cloud ops |
 
