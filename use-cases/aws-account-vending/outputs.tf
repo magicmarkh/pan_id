@@ -25,21 +25,6 @@ output "owner_team" {
   value       = module.aws_account.owner_team
 }
 
-output "admin_role_arn" {
-  description = "ARN of the administrator role"
-  value       = module.aws_iam_policies.admin_role_arn
-}
-
-output "developer_role_arn" {
-  description = "ARN of the developer role"
-  value       = module.aws_iam_policies.developer_role_arn
-}
-
-output "readonly_role_arn" {
-  description = "ARN of the read-only role"
-  value       = module.aws_iam_policies.readonly_role_arn
-}
-
 output "provisioning_summary" {
   description = "Summary of the provisioned resources"
   value = {
