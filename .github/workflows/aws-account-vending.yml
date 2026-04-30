@@ -303,20 +303,6 @@ jobs:
               body: output
             });
 
-      - name: Close Issue on Success
-        if: success()
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            github.rest.issues.update({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: 'closed',
-              labels: ['provision-aws-account', 'provisioned']
-            });
-
       - name: Comment Failure on Issue
         if: failure()
         uses: actions/github-script@v7
@@ -382,13 +368,13 @@ jobs:
           retention-days: 90
           if-no-files-found: error
 
-      - name: Comment SCA policies applied
+      - name: Close issue and comment SCA success
         if: success()
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            github.rest.issues.createComment({
+            await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -403,6 +389,14 @@ jobs:
               | **CloudOps** | ${{ secrets.SCA_CLOUDOPS_GROUP_NAME }} (group) |
 
               Access is available via CyberArk Secure Cloud Access. Sessions limited to 1 hour, Mon–Fri 08:00–18:00 UTC.`
+            });
+
+            await github.rest.issues.update({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'closed',
+              labels: ['provision-aws-account', 'provisioned']
             });
 
       - name: Comment SCA failure
