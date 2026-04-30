@@ -342,11 +342,20 @@ jobs:
         working-directory: ./use-cases/cyberark-sca-policy
         run: terraform init
 
+      - name: Extract CyberArk subdomain
+        id: cyberark_config
+        run: |
+          # https://abc1234.id.cyberark.cloud → abc1234
+          URL="${{ secrets.CYBERARK_TENANT_URL }}"
+          SUBDOMAIN="${URL#https://}"
+          SUBDOMAIN="${SUBDOMAIN%%.*}"
+          echo "subdomain=$SUBDOMAIN" >> $GITHUB_OUTPUT
+
       - name: Terraform Apply (SCA Policies)
         id: sca_apply
         working-directory: ./use-cases/cyberark-sca-policy
         env:
-          TF_VAR_cyberark_tenant_url: ${{ secrets.CYBERARK_TENANT_URL }}
+          TF_VAR_cyberark_subdomain: ${{ steps.cyberark_config.outputs.subdomain }}
           TF_VAR_cyberark_client_id: ${{ secrets.CYBERARK_CLIENT_ID }}
           TF_VAR_cyberark_client_secret: ${{ secrets.CYBERARK_CLIENT_SECRET }}
           TF_VAR_account_id: ${{ needs.provision-account.outputs.account_id }}

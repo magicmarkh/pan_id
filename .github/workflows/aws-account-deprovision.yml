@@ -122,11 +122,20 @@ jobs:
           ACCOUNT_NAME=$(echo "$SELECTION" | awk -F' | ' '{print $1}' | xargs)
           echo "account_name=$ACCOUNT_NAME" >> $GITHUB_OUTPUT
 
+      - name: Extract CyberArk subdomain
+        if: steps.find_sca_state.outputs.found == 'true'
+        id: cyberark_config
+        run: |
+          URL="${{ secrets.CYBERARK_TENANT_URL }}"
+          SUBDOMAIN="${URL#https://}"
+          SUBDOMAIN="${SUBDOMAIN%%.*}"
+          echo "subdomain=$SUBDOMAIN" >> $GITHUB_OUTPUT
+
       - name: Terraform Destroy (SCA Policies)
         if: steps.find_sca_state.outputs.found == 'true'
         working-directory: ./use-cases/cyberark-sca-policy
         env:
-          TF_VAR_cyberark_tenant_url: ${{ secrets.CYBERARK_TENANT_URL }}
+          TF_VAR_cyberark_subdomain: ${{ steps.cyberark_config.outputs.subdomain }}
           TF_VAR_cyberark_client_id: ${{ secrets.CYBERARK_CLIENT_ID }}
           TF_VAR_cyberark_client_secret: ${{ secrets.CYBERARK_CLIENT_SECRET }}
           TF_VAR_account_id: ${{ needs.parse-request.outputs.account_id }}

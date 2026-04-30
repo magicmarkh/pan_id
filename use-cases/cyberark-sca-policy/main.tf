@@ -10,9 +10,10 @@ terraform {
 }
 
 provider "idsec" {
-  tenant_url    = var.cyberark_tenant_url
-  client_id     = var.cyberark_client_id
-  client_secret = var.cyberark_client_secret
+  auth_method   = "identity_service_user"
+  service_user  = var.cyberark_client_id
+  service_token = var.cyberark_client_secret
+  subdomain     = var.cyberark_subdomain
 }
 
 module "cyberark_policy" {

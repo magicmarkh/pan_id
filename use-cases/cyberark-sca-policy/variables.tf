@@ -1,17 +1,16 @@
-variable "cyberark_tenant_url" {
-  description = "CyberArk Identity tenant URL"
+variable "cyberark_subdomain" {
+  description = "CyberArk Identity tenant subdomain (e.g. 'abc1234' from abc1234.id.cyberark.cloud)"
   type        = string
-  sensitive   = true
 }
 
 variable "cyberark_client_id" {
-  description = "OAuth2 client ID for CyberArk authentication"
+  description = "CyberArk Identity service user (OAuth2 client ID / app ID)"
   type        = string
   sensitive   = true
 }
 
 variable "cyberark_client_secret" {
-  description = "OAuth2 client secret for CyberArk authentication"
+  description = "CyberArk Identity service token (OAuth2 client secret)"
   type        = string
   sensitive   = true
 }
