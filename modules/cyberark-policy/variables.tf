@@ -1,5 +1,5 @@
 variable "account_id" {
-  description = "12-digit AWS account ID"
+  description = "12-digit AWS account ID (workspace_id)"
   type        = string
 }
 
@@ -8,8 +8,13 @@ variable "account_name" {
   type        = string
 }
 
+variable "org_management_account_id" {
+  description = "AWS Organizations management account ID (used as org_id in policy targets)"
+  type        = string
+}
+
 variable "power_user_group_name" {
-  description = "CyberArk group name for power user access (replaces per-user principal)"
+  description = "CyberArk group name for power user access"
   type        = string
 }
 
@@ -42,4 +47,22 @@ variable "max_session_duration" {
   description = "Maximum session duration in hours"
   type        = number
   default     = 1
+}
+
+variable "time_zone" {
+  description = "IANA timezone name (e.g. America/New_York, Etc/UTC)"
+  type        = string
+  default     = "Etc/UTC"
+}
+
+variable "access_window_from_hour" {
+  description = "Access window start time, HH:MM:SS"
+  type        = string
+  default     = "08:00:00"
+}
+
+variable "access_window_to_hour" {
+  description = "Access window end time, HH:MM:SS"
+  type        = string
+  default     = "18:00:00"
 }

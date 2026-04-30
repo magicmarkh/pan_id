@@ -25,6 +25,11 @@ variable "account_name" {
   type        = string
 }
 
+variable "org_management_account_id" {
+  description = "AWS Organizations management account ID (used as org_id in policy targets)"
+  type        = string
+}
+
 variable "power_user_group_name" {
   description = "CyberArk group name for power user access"
   type        = string

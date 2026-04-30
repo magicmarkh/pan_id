@@ -352,28 +352,14 @@ jobs:
           TF_VAR_cyberark_client_secret: ${{ secrets.CYBERARK_CLIENT_SECRET }}
           TF_VAR_account_id: ${{ needs.provision-account.outputs.account_id }}
           TF_VAR_account_name: ${{ needs.parse-request.outputs.account_name }}
+          TF_VAR_org_management_account_id: ${{ secrets.AWS_MANAGEMENT_ACCOUNT_ID }}
           TF_VAR_power_user_group_name: ${{ secrets.CYBERARK_POWERUSER_GROUP }}
           TF_VAR_power_user_permission_set_arn: ${{ secrets.SCA_POWER_USER_PERMISSION_SET_ARN }}
           TF_VAR_audit_permission_set_arn: ${{ secrets.SCA_AUDIT_PERMISSION_SET_ARN }}
           TF_VAR_cloudops_permission_set_arn: ${{ secrets.SCA_CLOUDOPS_PERMISSION_SET_ARN }}
           TF_VAR_audit_group_name: ${{ secrets.CYBERARK_AUDITOR_GROUP }}
           TF_VAR_cloudops_group_name: ${{ secrets.CYBERARK_CLOUDOPS_GROUP }}
-          TF_LOG: DEBUG
-          TF_LOG_PATH: /tmp/tf-debug.log
         run: terraform apply -auto-approve -no-color
-
-      - name: Surface SCA API error response (debug)
-        if: failure()
-        run: |
-          if [ ! -s /tmp/tf-debug.log ]; then
-            echo "No debug log captured."
-            exit 0
-          fi
-          echo "===== HTTP request/response context around 4xx/5xx ====="
-          grep -n -B 5 -A 60 -E 'HTTP/[12]\.[01] [45][0-9]{2}|"code":[ ]?[45][0-9]{2}|"faultCode":[ ]?[45][0-9]{2}' /tmp/tf-debug.log | head -500 || echo "(no matches)"
-          echo
-          echo "===== last 200 lines of debug log ====="
-          tail -200 /tmp/tf-debug.log
 
       - name: Upload SCA Terraform state
         if: success()
