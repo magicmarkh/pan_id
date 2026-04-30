@@ -56,7 +56,7 @@ variable "cloudops_group_name" {
 }
 
 variable "max_session_duration" {
-  description = "Maximum session duration in seconds"
+  description = "Maximum session duration in hours"
   type        = number
-  default     = 3600
+  default     = 1
 }
