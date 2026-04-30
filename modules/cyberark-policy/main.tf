@@ -1,118 +1,62 @@
+# CyberArk Identity — Access Policy Module
+#
+# Creates one CyberArk Identity role per access tier for a provisioned AWS account.
+# All access is defined as code alongside the infrastructure it governs — changes
+# flow through version control and the same approval gate as account creation.
+#
+# Role naming convention: aws-{account_name}-{tier}
+#   poweruser      → RequesterPowerUser  (PowerUserAccess in AWS)
+#   audit          → AuditorReadOnly     (ReadOnlyAccess + SecurityAudit in AWS)
+#   cloudopsadmin  → CloudOpsAdmin       (AdministratorAccess in AWS)
+
 terraform {
+  required_version = ">= 1.7.0"
+
   required_providers {
     idsec = {
-      source = "cyberark/idsec"
+      source  = "cyberark/idsec"
+      version = "~> 1.0"
     }
   }
 }
 
-resource "idsec_policy_cloud_access" "power_user" {
-  metadata = {
-    name        = "aws-${var.account_name}-poweruser"
-    description = "Power user access to AWS account ${var.account_name} (${var.account_id})"
-    status      = { status = "Active" }
-    policy_entitlement = {
-      target_category = "Cloud console"
-      location_type   = "AWS"
-      policy_type     = "Recurring"
-    }
-    time_zone = "UTC"
-  }
-  delegation_classification = "Unrestricted"
-  principals = [
-    {
-      name = var.requester_username
-      type = "USER"
-    }
-  ]
-  targets = {
-    aws_account_targets = [
-      {
-        role_id      = var.power_user_permission_set_arn
-        workspace_id = var.account_id
-      }
-    ]
-  }
-  conditions = {
-    max_session_duration = var.max_session_duration
-    access_window = {
-      days_of_the_week = [1, 2, 3, 4, 5]
-      from_hour        = "08:00:00"
-      to_hour          = "18:00:00"
-    }
-  }
+# ── CyberArk Identity Roles ───────────────────────────────────────────────────
+
+resource "idsec_role" "power_user" {
+  name        = "aws-${var.account_name}-poweruser"
+  description = "Power user access to AWS account ${var.account_name} (${var.account_id}) — ${var.environment}"
 }
 
-resource "idsec_policy_cloud_access" "audit" {
-  metadata = {
-    name        = "aws-${var.account_name}-audit"
-    description = "Read-only audit access to AWS account ${var.account_name} (${var.account_id})"
-    status      = { status = "Active" }
-    policy_entitlement = {
-      target_category = "Cloud console"
-      location_type   = "AWS"
-      policy_type     = "Recurring"
-    }
-    time_zone = "UTC"
-  }
-  delegation_classification = "Unrestricted"
-  principals = [
-    {
-      name = var.audit_group_name
-      type = "GROUP"
-    }
-  ]
-  targets = {
-    aws_account_targets = [
-      {
-        role_id      = var.audit_permission_set_arn
-        workspace_id = var.account_id
-      }
-    ]
-  }
-  conditions = {
-    max_session_duration = var.max_session_duration
-    access_window = {
-      days_of_the_week = [1, 2, 3, 4, 5]
-      from_hour        = "08:00:00"
-      to_hour          = "18:00:00"
-    }
-  }
+resource "idsec_role" "audit" {
+  name        = "aws-${var.account_name}-audit"
+  description = "Read-only audit access to AWS account ${var.account_name} (${var.account_id})"
 }
 
-resource "idsec_policy_cloud_access" "cloudops" {
-  metadata = {
-    name        = "aws-${var.account_name}-cloudops"
-    description = "Admin access to AWS account ${var.account_name} (${var.account_id})"
-    status      = { status = "Active" }
-    policy_entitlement = {
-      target_category = "Cloud console"
-      location_type   = "AWS"
-      policy_type     = "Recurring"
-    }
-    time_zone = "UTC"
-  }
-  delegation_classification = "Unrestricted"
-  principals = [
-    {
-      name = var.cloudops_group_name
-      type = "GROUP"
-    }
-  ]
-  targets = {
-    aws_account_targets = [
-      {
-        role_id      = var.cloudops_permission_set_arn
-        workspace_id = var.account_id
-      }
-    ]
-  }
-  conditions = {
-    max_session_duration = var.max_session_duration
-    access_window = {
-      days_of_the_week = [1, 2, 3, 4, 5]
-      from_hour        = "08:00:00"
-      to_hour          = "18:00:00"
-    }
-  }
+resource "idsec_role" "cloudops_admin" {
+  name        = "aws-${var.account_name}-cloudopsadmin"
+  description = "Admin access to AWS account ${var.account_name} (${var.account_id}) — cloud-ops team"
+}
+
+# ── Role Membership ───────────────────────────────────────────────────────────
+
+resource "idsec_role_member" "requester_power_user" {
+  role_id     = idsec_role.power_user.id
+  member_name = var.requester_username
+  member_type = "User"
+}
+
+resource "idsec_role_member" "auditor_group" {
+  count = var.auditor_group != "" ? 1 : 0
+
+  role_id     = idsec_role.audit.id
+  member_name = var.auditor_group
+  member_type = "Group"
+}
+
+resource "idsec_role_member" "cloudops_group" {
+  count = var.cloudops_group != "" ? 1 : 0
+
+  role_id     = idsec_role.cloudops_admin.id
+  member_name = var.cloudops_group
+  member_type = "Group"
 }

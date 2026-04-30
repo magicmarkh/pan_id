@@ -1,12 +1,15 @@
-# AWS IAM Policies Variables
-
 variable "account_id" {
-  description = "AWS account ID where policies will be created"
+  description = "AWS account ID of the provisioned account"
+  type        = string
+}
+
+variable "account_name" {
+  description = "Name/label of the provisioned AWS account (used in role names)"
   type        = string
 }
 
 variable "environment" {
-  description = "Environment type (dev, staging, prod)"
+  description = "Environment tier (dev, staging, prod)"
   type        = string
 
   validation {
@@ -16,45 +19,17 @@ variable "environment" {
 }
 
 variable "owner_team" {
-  description = "Team that owns this account"
+  description = "Team responsible for this account"
   type        = string
 }
 
-variable "create_admin_role" {
-  description = "Create an administrator role"
-  type        = bool
-  default     = true
-}
-
-variable "create_developer_role" {
-  description = "Create a developer role with limited permissions"
-  type        = bool
-  default     = true
-}
-
-variable "create_readonly_role" {
-  description = "Create a read-only role"
-  type        = bool
-  default     = true
-}
-
-variable "trusted_principals" {
-  description = "List of AWS principals that can assume the created roles"
-  type        = list(string)
-  default     = []
+variable "management_account_id" {
+  description = "AWS management account ID — used as the trusted principal in cross-account role trust policies"
+  type        = string
 }
 
 variable "require_mfa" {
-  description = "Require MFA for role assumption"
+  description = "Require MFA when assuming these roles (recommended for prod)"
   type        = bool
-  default     = true
-}
-
-variable "custom_policies" {
-  description = "Map of custom IAM policies to create"
-  type = map(object({
-    description = string
-    policy_json = string
-  }))
-  default = {}
+  default     = false
 }

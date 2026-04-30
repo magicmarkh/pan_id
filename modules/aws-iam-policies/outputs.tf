@@ -1,26 +1,29 @@
-# AWS IAM Policies Outputs
-
-output "admin_role_arn" {
-  description = "ARN of the administrator role"
-  value       = "" # Placeholder
+output "power_user_role_arn" {
+  description = "ARN of the RequesterPowerUser cross-account role"
+  value       = aws_iam_role.power_user.arn
 }
 
-output "developer_role_arn" {
-  description = "ARN of the developer role"
-  value       = "" # Placeholder
+output "auditor_role_arn" {
+  description = "ARN of the AuditorReadOnly cross-account role"
+  value       = aws_iam_role.auditor.arn
 }
 
-output "readonly_role_arn" {
-  description = "ARN of the read-only role"
-  value       = "" # Placeholder
+output "cloudops_admin_role_arn" {
+  description = "ARN of the CloudOpsAdmin cross-account role"
+  value       = aws_iam_role.cloudops_admin.arn
 }
 
-output "policy_arns" {
-  description = "Map of created policy names to their ARNs"
-  value       = {} # Placeholder
+output "power_user_role_name" {
+  description = "Name of the RequesterPowerUser role"
+  value       = aws_iam_role.power_user.name
 }
 
-output "custom_policy_arns" {
-  description = "ARNs of custom policies created"
-  value       = {} # Placeholder
+output "auditor_role_name" {
+  description = "Name of the AuditorReadOnly role"
+  value       = aws_iam_role.auditor.name
+}
+
+output "cloudops_admin_role_name" {
+  description = "Name of the CloudOpsAdmin role"
+  value       = aws_iam_role.cloudops_admin.name
 }

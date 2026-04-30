@@ -1,45 +1,32 @@
 variable "account_id" {
+  description = "AWS account ID of the provisioned account"
   description = "12-digit AWS account ID"
   type        = string
 }
 
 variable "account_name" {
-  description = "Label for this account assignment"
+  description = "Name/label of the provisioned AWS account (used in role names)"
+  type        = string
+}
+
+variable "environment" {
+  description = "Environment tier (dev, staging, prod)"
   type        = string
 }
 
 variable "requester_username" {
-  description = "CyberArk username of the user who requested this account"
+  description = "CyberArk Identity username of the engineer who requested the account"
   type        = string
 }
 
-variable "power_user_permission_set_arn" {
-  description = "IAM Identity Center permission set ARN for power user access"
+variable "auditor_group" {
+  description = "CyberArk Identity group to assign ReadOnly audit access (leave empty to skip)"
   type        = string
+  default     = ""
 }
 
-variable "audit_permission_set_arn" {
-  description = "IAM Identity Center permission set ARN for read-only audit access"
+variable "cloudops_group" {
+  description = "CyberArk Identity group to assign Admin access (leave empty to skip)"
   type        = string
-}
-
-variable "cloudops_permission_set_arn" {
-  description = "IAM Identity Center permission set ARN for admin access"
-  type        = string
-}
-
-variable "audit_group_name" {
-  description = "CyberArk group name for auditors"
-  type        = string
-}
-
-variable "cloudops_group_name" {
-  description = "CyberArk group name for cloud ops"
-  type        = string
-}
-
-variable "max_session_duration" {
-  description = "Maximum session duration in seconds"
-  type        = number
-  default     = 3600
+  default     = ""
 }
