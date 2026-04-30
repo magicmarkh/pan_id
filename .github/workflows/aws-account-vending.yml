@@ -357,13 +357,14 @@ jobs:
           esac
 
           HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://${SUBDOMAIN}.platform-discovery.cyberark.cloud/api/v2/services/")
+            "https://platform-discovery.cyberark.cloud/api/v2/services/subdomain/${SUBDOMAIN}")
           echo "Platform discovery HTTP status: $HTTP_CODE"
           case "$HTTP_CODE" in
-            2*) echo "✅ ISP tenant resolves via platform discovery" ;;
+            200) echo "✅ ISP tenant resolves via platform discovery" ;;
             404)
               echo "❌ 404 — CYBERARK_SUBDOMAIN does not match an ISP tenant subdomain."
-              echo "   Note: this is the tenant *subdomain name*, not the tenant ID."
+              echo "   This must be the ISP tenant *subdomain name* (the prefix of"
+              echo "   <subdomain>.cyberark.cloud), not the underlying Identity tenant ID."
               exit 1 ;;
             *)
               echo "⚠️ Unexpected HTTP $HTTP_CODE from platform discovery"
