@@ -353,12 +353,12 @@ jobs:
           TF_VAR_account_id: ${{ needs.provision-account.outputs.account_id }}
           TF_VAR_account_name: ${{ needs.parse-request.outputs.account_name }}
           TF_VAR_org_management_account_id: ${{ secrets.AWS_MANAGEMENT_ACCOUNT_ID }}
-          TF_VAR_power_user_group_name: ${{ secrets.CYBERARK_POWERUSER_GROUP }}
+          TF_VAR_power_user_role_name: ${{ secrets.CYBERARK_POWERUSER_ROLE }}
           TF_VAR_power_user_permission_set_arn: ${{ secrets.SCA_POWER_USER_PERMISSION_SET_ARN }}
           TF_VAR_audit_permission_set_arn: ${{ secrets.SCA_AUDIT_PERMISSION_SET_ARN }}
           TF_VAR_cloudops_permission_set_arn: ${{ secrets.SCA_CLOUDOPS_PERMISSION_SET_ARN }}
-          TF_VAR_audit_group_name: ${{ secrets.CYBERARK_AUDITOR_GROUP }}
-          TF_VAR_cloudops_group_name: ${{ secrets.CYBERARK_CLOUDOPS_GROUP }}
+          TF_VAR_audit_role_name: ${{ secrets.CYBERARK_AUDITOR_ROLE }}
+          TF_VAR_cloudops_role_name: ${{ secrets.CYBERARK_CLOUDOPS_ROLE }}
           TF_LOG: DEBUG
           TF_LOG_PATH: /tmp/tf-debug.log
         run: terraform apply -auto-approve -no-color
@@ -404,9 +404,9 @@ jobs:
 
               | Policy | Principal |
               |---|---|
-              | **PowerUser** | ${{ secrets.CYBERARK_POWERUSER_GROUP }} (group) |
-              | **Audit** | ${{ secrets.CYBERARK_AUDITOR_GROUP }} (group) |
-              | **CloudOps** | ${{ secrets.CYBERARK_CLOUDOPS_GROUP }} (group) |
+              | **PowerUser** | ${{ secrets.CYBERARK_POWERUSER_ROLE }} (role) |
+              | **Audit** | ${{ secrets.CYBERARK_AUDITOR_ROLE }} (role) |
+              | **CloudOps** | ${{ secrets.CYBERARK_CLOUDOPS_ROLE }} (role) |
 
               Access is available via CyberArk Secure Cloud Access. Sessions limited to 1 hour, Mon–Fri 08:00–18:00 UTC.`
             });
