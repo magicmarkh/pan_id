@@ -58,7 +58,7 @@ GitHub Issue Form (multi-select) → GitHub Actions → [production gate]
 - Vending and deprovision workflows also call `createWorkflowDispatch` on success for immediate refresh
 
 ## Key Design Decisions (Already Made — Do Not Revisit Unless Asked)
-- **CyberArk SCA auth:** OAuth2 confidential client (`service_user` / `service_token`) via idsec Terraform provider; tenant identified by `subdomain` only (not full URL)
+- **CyberArk SCA auth:** OAuth2 confidential client (`service_user` / `service_token`) via idsec Terraform provider; tenant identified by `subdomain` only (not full URL). The `subdomain` value must be the ISP tenant *name* (prefix of `<name>.cyberark.cloud`), NOT the underlying Identity tenant ID (prefix of `<id>.id.cyberark.cloud`). The provider resolves all service endpoints via `platform-discovery.cyberark.cloud/api/v2/services/subdomain/<name>`.
 - **AWS credential flow:** GitHub OIDC → `GitHubActionsOrgProvisioner` IAM role — no static AWS keys
 - **Approval gate:** GitHub Environments (`environment: production`) on every destructive job
 - **Issue parsing:** `stefanbuck/github-issue-parser@v3` maps issue form fields to job outputs
@@ -97,7 +97,7 @@ pan_id/
 ## GitHub Secrets Required
 | Secret | Description |
 |---|---|
-| `CYBERARK_SUBDOMAIN` | Tenant subdomain only e.g. `abc1234` (used by idsec Terraform provider) |
+| `CYBERARK_SUBDOMAIN` | ISP tenant subdomain **name** e.g. `murphyslab` — the prefix of `<subdomain>.cyberark.cloud`. NOT the Identity tenant ID (e.g. `abv4527`). Used by idsec provider via `platform-discovery.cyberark.cloud/api/v2/services/subdomain/<value>` |
 | `CYBERARK_CLIENT_ID` | OAuth2 service account client ID (`service_user` in idsec provider) |
 | `CYBERARK_CLIENT_SECRET` | OAuth2 service account client secret (`service_token` in idsec provider) |
 | `AWS_MANAGEMENT_ACCOUNT_ID` | 12-digit management account ID (used to construct the GitHubActionsOrgProvisioner IAM role ARN) |
