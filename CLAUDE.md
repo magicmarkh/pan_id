@@ -214,6 +214,7 @@ The `refresh-issue-templates.yml` workflow reads these tags to populate dropdown
 - `time_zone` (optional, default `"GMT"`)
 - `time_frame.from_time` / `to_time` (optional ISO 8601 `yyyy-MM-ddTHH:mm:ss`)
 - `status`, `created_by`, `updated_on`, `policy_id` are **computed/read-only** — DO NOT set
+- The resource has **no top-level `id` attribute**. The policy ID is `<resource>.metadata.policy_id`
 
 **`delegation_classification`** (optional, string, default `"Unrestricted"`)
 - Valid values: `"Unrestricted"`, `"Restricted"` — NOT `"Privileged"`
