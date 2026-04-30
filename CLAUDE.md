@@ -216,10 +216,10 @@ The `refresh-issue-templates.yml` workflow reads these tags to populate dropdown
 - `status`, `created_by`, `updated_on`, `policy_id` are **computed/read-only** — DO NOT set
 
 **`delegation_classification`** (optional, string, default `"Unrestricted"`)
-- For privileged demos, set to `"Privileged"`
+- Valid values: `"Unrestricted"`, `"Restricted"` — NOT `"Privileged"`
 
 **`principals`** (list of objects)
-- `name`, `type` (User/Group/Role), optional `id`, `source_directory_id`, `source_directory_name`
+- `name`, `type` (`USER`/`GROUP`/`ROLE` — **uppercase**), optional `id`, `source_directory_id`, `source_directory_name`
 
 **`targets.aws_account_targets`** (list of objects)
 - `role_id` (required) = IAM Identity Center **permission set ARN** (NOT an IAM role ARN — SCA federates through IAM Identity Center)

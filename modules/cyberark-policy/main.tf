@@ -30,12 +30,12 @@ resource "idsec_policy_cloud_access" "power_user" {
     time_zone = "UTC"
   }
 
-  delegation_classification = "Privileged"
+  delegation_classification = "Unrestricted"
 
   principals = [
     {
       name = var.requester_username
-      type = "User"
+      type = "USER"
     }
   ]
 
@@ -66,12 +66,12 @@ resource "idsec_policy_cloud_access" "audit" {
     time_zone = "UTC"
   }
 
-  delegation_classification = "Privileged"
+  delegation_classification = "Unrestricted"
 
   principals = [
     {
       name = var.audit_group_name
-      type = "Group"
+      type = "GROUP"
     }
   ]
 
@@ -102,12 +102,12 @@ resource "idsec_policy_cloud_access" "cloudops" {
     time_zone = "UTC"
   }
 
-  delegation_classification = "Privileged"
+  delegation_classification = "Unrestricted"
 
   principals = [
     {
       name = var.cloudops_group_name
-      type = "Group"
+      type = "GROUP"
     }
   ]
 
