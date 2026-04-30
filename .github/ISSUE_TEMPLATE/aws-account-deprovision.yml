@@ -24,9 +24,7 @@ body:
 
       '
     options:
-    - sandbox 1 | 396913732694
-    - jde-idc-dev | 128327517575
-    - jde-idc-prod | 597088054319
+    - No accounts found — check AWS Organizations
   validations:
     required: true
 - type: dropdown
