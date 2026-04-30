@@ -1,3 +1,11 @@
+terraform {
+  required_providers {
+    idsec = {
+      source = "cyberark/idsec"
+    }
+  }
+}
+
 resource "idsec_policy_cloud_access" "power_user" {
   metadata = {
     name        = "aws-${var.account_name}-poweruser"
