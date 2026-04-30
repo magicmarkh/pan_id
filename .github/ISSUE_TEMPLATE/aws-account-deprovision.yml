@@ -17,9 +17,10 @@ body:
 - type: dropdown
   id: active_account
   attributes:
-    label: Account to Deprovision
-    description: 'Select the active lab account to return to the pool. Run the "Refresh
-      Issue Templates" workflow to populate with currently assigned accounts.
+    label: Accounts to Deprovision
+    multiple: true
+    description: 'Select one or more active lab accounts to return to the pool. Run
+      the "Refresh Issue Templates" workflow to populate with currently assigned accounts.
 
       '
     options:

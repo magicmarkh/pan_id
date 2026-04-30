@@ -18,8 +18,7 @@ jobs:
     if: github.event.label.name == 'deprovision-aws-account'
     runs-on: ubuntu-latest
     outputs:
-      active_account: ${{ steps.parse.outputs.issueparser_active_account }}
-      account_id: ${{ steps.parse_account_id.outputs.account_id }}
+      accounts_json: ${{ steps.parse_accounts.outputs.accounts_json }}
       mode: ${{ steps.parse.outputs.issueparser_mode }}
 
     steps:
@@ -32,8 +31,8 @@ jobs:
         with:
           template-path: .github/ISSUE_TEMPLATE/aws-account-deprovision.yml
 
-      - name: Parse account ID from dropdown selection
-        id: parse_account_id
+      - name: Parse account list from multi-select
+        id: parse_accounts
         run: |
           SELECTION="${{ steps.parse.outputs.issueparser_active_account }}"
 
@@ -42,15 +41,28 @@ jobs:
             exit 1
           fi
 
-          # Dropdown format: "Account Name | 123456789012"
-          ACCOUNT_ID=$(echo "$SELECTION" | awk -F' | ' '{print $NF}' | tr -d ' ')
-          echo "account_id=$ACCOUNT_ID" >> $GITHUB_OUTPUT
-          echo "Parsed account ID: $ACCOUNT_ID"
+          # Multi-select returns comma-separated "Name | ID" entries
+          ACCOUNTS_JSON="[]"
+          IFS=',' read -ra ITEMS <<< "$SELECTION"
+          for ITEM in "${ITEMS[@]}"; do
+            ITEM=$(echo "$ITEM" | xargs)
+            ACCOUNT_ID=$(echo "$ITEM" | awk -F' [|] ' '{print $NF}' | tr -d ' ')
+            ACCOUNT_NAME=$(echo "$ITEM" | awk -F' [|] ' '{print $1}' | xargs)
+            ENTRY=$(printf '{"id":"%s","name":"%s"}' "$ACCOUNT_ID" "$ACCOUNT_NAME")
+            ACCOUNTS_JSON=$(echo "$ACCOUNTS_JSON" | jq -c --argjson e "$ENTRY" '. + [$e]')
+          done
+
+          echo "accounts_json=$ACCOUNTS_JSON" >> $GITHUB_OUTPUT
+          echo "Parsed $(echo "$ACCOUNTS_JSON" | jq length) account(s): $ACCOUNTS_JSON"
 
   deprovision-account:
     needs: parse-request
     runs-on: ubuntu-latest
     environment: production
+    strategy:
+      fail-fast: false
+      matrix:
+        account: ${{ fromJSON(needs.parse-request.outputs.accounts_json) }}
 
     steps:
       - name: Checkout repository
@@ -61,7 +73,7 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_MANAGEMENT_ACCOUNT_ID }}:role/GitHubActionsOrgProvisioner
           aws-region: us-east-1
-          role-session-name: GitHubActions-Deprovision-${{ github.run_id }}
+          role-session-name: GitHubActions-Deprovision-${{ matrix.account.id }}-${{ github.run_id }}
 
       - name: Find SCA state artifact
         id: find_sca_state
@@ -69,7 +81,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const accountId = "${{ needs.parse-request.outputs.account_id }}";
+            const accountId = "${{ matrix.account.id }}";
             const artifactName = `sca-tfstate-${accountId}`;
 
             const { data } = await github.rest.actions.listArtifactsForRepo({
@@ -97,7 +109,7 @@ jobs:
         if: steps.find_sca_state.outputs.found == 'true'
         uses: actions/download-artifact@v4
         with:
-          name: sca-tfstate-${{ needs.parse-request.outputs.account_id }}
+          name: sca-tfstate-${{ matrix.account.id }}
           path: ./use-cases/cyberark-sca-policy
           run-id: ${{ steps.find_sca_state.outputs.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -113,15 +125,6 @@ jobs:
         working-directory: ./use-cases/cyberark-sca-policy
         run: terraform init
 
-      - name: Parse account name from selection
-        if: steps.find_sca_state.outputs.found == 'true'
-        id: parse_account_name
-        run: |
-          # Dropdown format: "Account Name | 123456789012" — extract the name part
-          SELECTION="${{ needs.parse-request.outputs.active_account }}"
-          ACCOUNT_NAME=$(echo "$SELECTION" | awk -F' | ' '{print $1}' | xargs)
-          echo "account_name=$ACCOUNT_NAME" >> $GITHUB_OUTPUT
-
       - name: Terraform Destroy (SCA Policies)
         if: steps.find_sca_state.outputs.found == 'true'
         working-directory: ./use-cases/cyberark-sca-policy
@@ -129,8 +132,8 @@ jobs:
           TF_VAR_cyberark_subdomain: ${{ secrets.CYBERARK_SUBDOMAIN }}
           TF_VAR_cyberark_client_id: ${{ secrets.CYBERARK_CLIENT_ID }}
           TF_VAR_cyberark_client_secret: ${{ secrets.CYBERARK_CLIENT_SECRET }}
-          TF_VAR_account_id: ${{ needs.parse-request.outputs.account_id }}
-          TF_VAR_account_name: ${{ steps.parse_account_name.outputs.account_name }}
+          TF_VAR_account_id: ${{ matrix.account.id }}
+          TF_VAR_account_name: ${{ matrix.account.name }}
           TF_VAR_requester_username: placeholder
           TF_VAR_power_user_permission_set_arn: ${{ secrets.SCA_POWER_USER_PERMISSION_SET_ARN }}
           TF_VAR_audit_permission_set_arn: ${{ secrets.SCA_AUDIT_PERMISSION_SET_ARN }}
@@ -141,16 +144,14 @@ jobs:
 
       - name: No SCA state found
         if: steps.find_sca_state.outputs.found != 'true'
-        run: echo "⚠️ No SCA policies state found — skipping policy removal"
+        run: echo "⚠️ No SCA policies state found for ${{ matrix.account.id }} — skipping policy removal"
 
       - name: Return account to pool (Simulate)
         if: needs.parse-request.outputs.mode == 'Simulate'
-        id: return_account
         run: |
-          ACCOUNT_ID="${{ needs.parse-request.outputs.account_id }}"
+          ACCOUNT_ID="${{ matrix.account.id }}"
           POOL_OU_ID="${{ secrets.AWS_POOL_OU_ID }}"
 
-          # Dynamically find the account's current parent — works regardless of which OU it's in
           CURRENT_PARENT=$(aws organizations list-parents \
             --child-id "$ACCOUNT_ID" \
             --query 'Parents[0].Id' \
@@ -158,7 +159,6 @@ jobs:
 
           echo "Current parent: $CURRENT_PARENT"
 
-          # Move back to pool OU (skip if already there)
           if [ "$CURRENT_PARENT" = "$POOL_OU_ID" ]; then
             echo "⚠️ Account is already in pool OU — skipping move"
           else
@@ -169,7 +169,6 @@ jobs:
             echo "✅ Moved account back to pool OU"
           fi
 
-          # Reset tags — strip assignment metadata, restore Available status
           aws organizations untag-resource \
             --resource-id "$ACCOUNT_ID" \
             --tag-keys AssignedTo AssignedBy AssignedAt Environment OwnerTeam
@@ -180,38 +179,47 @@ jobs:
 
           echo "✅ Reset tags — account marked Available"
 
-          # Reset alias (best-effort)
           CURRENT_ALIAS=$(aws iam list-account-aliases \
             --query 'AccountAliases[0]' --output text 2>/dev/null || true)
           [ -n "$CURRENT_ALIAS" ] && [ "$CURRENT_ALIAS" != "None" ] && \
             aws iam delete-account-alias --account-alias "$CURRENT_ALIAS" \
             || echo "⚠️ Could not reset alias (non-fatal)"
 
-          echo "✅ Deprovisioning complete"
+          echo "✅ Deprovisioning complete for ${{ matrix.account.id }}"
 
-      - name: Comment Success on Issue
-        if: success()
+  notify:
+    needs: [parse-request, deprovision-account]
+    if: always() && needs.parse-request.result == 'success'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Comment on Issue
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const scaRemoved = "${{ steps.find_sca_state.outputs.found }}" === "true";
-            const scaNote = scaRemoved
-              ? "\n- 🔐 CyberArk SCA policies removed"
-              : "\n- ⚠️ No CyberArk SCA state found — policies may need manual cleanup";
+            const allSucceeded = "${{ needs.deprovision-account.result }}" === "success";
+            const accounts = JSON.parse('${{ needs.parse-request.outputs.accounts_json }}');
+            const accountList = accounts.map(a => `- \`${a.id}\` — ${a.name}`).join('\n');
 
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `### ✅ Account Returned to Pool
-
-              Account \`${{ needs.parse-request.outputs.account_id }}\` has been deprovisioned:
-              - ✅ Returned to lab pool (tagged Available)${scaNote}`
-            });
+            if (allSucceeded) {
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: `### ✅ Accounts Returned to Pool\n\nAll ${accounts.length} account(s) deprovisioned:\n${accountList}\n\nEach account has been returned to the lab pool, tagged Available, and SCA policies removed (where state existed).`
+              });
+            } else {
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: `### ⚠️ Deprovisioning Partially Failed\n\nOne or more accounts failed — check individual job logs:\n${accountList}\n\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`
+              });
+            }
 
       - name: Close Issue
-        if: success()
+        if: needs.deprovision-account.result == 'success'
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -225,7 +233,7 @@ jobs:
             });
 
       - name: Trigger Refresh Issue Templates
-        if: success()
+        if: needs.deprovision-account.result == 'success'
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -237,17 +245,3 @@ jobs:
               ref: context.ref
             });
             console.log('Triggered Refresh Issue Templates workflow');
-
-      - name: Comment Failure on Issue
-        if: failure()
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `### ❌ Deprovisioning Failed
-              [View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`
-            });
