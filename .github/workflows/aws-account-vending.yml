@@ -20,9 +20,6 @@ jobs:
       mode: ${{ steps.parse.outputs.issueparser_mode }}
       pool_account: ${{ steps.parse.outputs.issueparser_pool_account }}
       account_name: ${{ steps.parse.outputs.issueparser_account_name }}
-      target_ou: ${{ steps.parse.outputs.issueparser_target_ou }}
-      environment: ${{ steps.parse.outputs.issueparser_environment }}
-      owner_team: ${{ steps.parse.outputs.issueparser_owner_team }}
       account_email: ${{ steps.generate_email.outputs.account_email }}
       requester: ${{ github.event.issue.user.login }}
 
@@ -49,9 +46,6 @@ jobs:
           echo "Mode:         ${{ steps.parse.outputs.issueparser_mode }}"
           echo "Pool Account: ${{ steps.parse.outputs.issueparser_pool_account }}"
           echo "Account Name: ${{ steps.parse.outputs.issueparser_account_name }}"
-          echo "Target OU:    ${{ steps.parse.outputs.issueparser_target_ou }}"
-          echo "Environment:  ${{ steps.parse.outputs.issueparser_environment }}"
-          echo "Owner Team:   ${{ steps.parse.outputs.issueparser_owner_team }}"
           echo "Requester:    ${{ github.event.issue.user.login }}"
 
   provision-account:
@@ -132,9 +126,7 @@ jobs:
               Key=Status,Value=InUse \
               Key=AssignedTo,Value="$ACCOUNT_NAME" \
               Key=AssignedBy,Value="${{ needs.parse-request.outputs.requester }}" \
-              Key=AssignedAt,Value="$TIMESTAMP" \
-              Key=Environment,Value="${{ needs.parse-request.outputs.environment }}" \
-              Key=OwnerTeam,Value="${{ needs.parse-request.outputs.owner_team }}"
+              Key=AssignedAt,Value="$TIMESTAMP"
 
           echo "✅ Tagged account as InUse"
 
@@ -165,20 +157,6 @@ jobs:
 
           echo "✅ Account name '${ACCOUNT_NAME}' is available"
 
-      - name: Parse target OU (Create)
-        if: needs.parse-request.outputs.mode == 'Create'
-        id: parse_target_ou
-        run: |
-          # Dropdown format: "OU Name | ou-xxxx-yyyyyyy"
-          SELECTION="${{ needs.parse-request.outputs.target_ou }}"
-          if [[ "$SELECTION" == *"Refresh Issue Templates"* || -z "$SELECTION" ]]; then
-            OU_ID=""
-          else
-            OU_ID=$(echo "$SELECTION" | awk -F' | ' '{print $NF}' | tr -d ' ')
-          fi
-          echo "ou_id=$OU_ID" >> $GITHUB_OUTPUT
-          echo "Target OU ID: ${OU_ID:-'(none — will use org root)'}"
-
       - name: Setup Terraform (Create)
         if: needs.parse-request.outputs.mode == 'Create'
         uses: hashicorp/setup-terraform@v3
@@ -198,9 +176,7 @@ jobs:
         env:
           TF_VAR_account_name: ${{ needs.parse-request.outputs.account_name }}
           TF_VAR_account_email: ${{ needs.parse-request.outputs.account_email }}
-          TF_VAR_environment: ${{ needs.parse-request.outputs.environment }}
-          TF_VAR_owner_team: ${{ needs.parse-request.outputs.owner_team }}
-          TF_VAR_target_ou_id: ${{ steps.parse_target_ou.outputs.ou_id }}
+          TF_VAR_target_ou_id: ${{ secrets.AWS_ACTIVE_OU_ID }}
         run: terraform plan -out=tfplan -no-color
 
       - name: Comment Plan on Issue (Create)
@@ -235,9 +211,7 @@ jobs:
         env:
           TF_VAR_account_name: ${{ needs.parse-request.outputs.account_name }}
           TF_VAR_account_email: ${{ needs.parse-request.outputs.account_email }}
-          TF_VAR_environment: ${{ needs.parse-request.outputs.environment }}
-          TF_VAR_owner_team: ${{ needs.parse-request.outputs.owner_team }}
-          TF_VAR_target_ou_id: ${{ steps.parse_target_ou.outputs.ou_id }}
+          TF_VAR_target_ou_id: ${{ secrets.AWS_ACTIVE_OU_ID }}
         run: terraform apply -auto-approve tfplan
 
       - name: Get Terraform account ID (Create)
@@ -287,10 +261,8 @@ jobs:
             **Account Details:**
             | Field | Value |
             |---|---|
-            | **Requested Name** | ${{ needs.parse-request.outputs.account_name }} |
+            | **Account Name** | ${{ needs.parse-request.outputs.account_name }} |
             | **Account ID** | ${accountId} |
-            | **Environment** | ${{ needs.parse-request.outputs.environment }} |
-            | **Owner Team** | ${{ needs.parse-request.outputs.owner_team }} |
             | **Requested By** | @${{ needs.parse-request.outputs.requester }} |
             | **Mode** | ${mode} |
 
