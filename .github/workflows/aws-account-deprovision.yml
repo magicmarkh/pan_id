@@ -135,12 +135,12 @@ jobs:
           TF_VAR_account_id: ${{ matrix.account.id }}
           TF_VAR_account_name: ${{ matrix.account.name }}
           TF_VAR_org_management_account_id: ${{ secrets.AWS_MANAGEMENT_ACCOUNT_ID }}
-          TF_VAR_power_user_group_name: ${{ secrets.CYBERARK_POWERUSER_GROUP }}
+          TF_VAR_power_user_role_name: ${{ secrets.CYBERARK_POWERUSER_ROLE }}
           TF_VAR_power_user_permission_set_arn: ${{ secrets.SCA_POWER_USER_PERMISSION_SET_ARN }}
           TF_VAR_audit_permission_set_arn: ${{ secrets.SCA_AUDIT_PERMISSION_SET_ARN }}
           TF_VAR_cloudops_permission_set_arn: ${{ secrets.SCA_CLOUDOPS_PERMISSION_SET_ARN }}
-          TF_VAR_audit_group_name: ${{ secrets.CYBERARK_AUDITOR_GROUP }}
-          TF_VAR_cloudops_group_name: ${{ secrets.CYBERARK_CLOUDOPS_GROUP }}
+          TF_VAR_audit_role_name: ${{ secrets.CYBERARK_AUDITOR_ROLE }}
+          TF_VAR_cloudops_role_name: ${{ secrets.CYBERARK_CLOUDOPS_ROLE }}
         run: terraform destroy -auto-approve -no-color
 
       - name: No SCA state found

@@ -22,11 +22,11 @@ module "cyberark_policy" {
   account_id                    = var.account_id
   account_name                  = var.account_name
   org_management_account_id     = var.org_management_account_id
-  power_user_group_name         = var.power_user_group_name
+  power_user_role_name         = var.power_user_role_name
   power_user_permission_set_arn = var.power_user_permission_set_arn
   audit_permission_set_arn      = var.audit_permission_set_arn
   cloudops_permission_set_arn   = var.cloudops_permission_set_arn
-  audit_group_name              = var.audit_group_name
-  cloudops_group_name           = var.cloudops_group_name
+  audit_role_name              = var.audit_role_name
+  cloudops_role_name           = var.cloudops_role_name
   max_session_duration          = var.max_session_duration
 }

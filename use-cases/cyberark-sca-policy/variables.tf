@@ -30,8 +30,8 @@ variable "org_management_account_id" {
   type        = string
 }
 
-variable "power_user_group_name" {
-  description = "CyberArk group name for power user access"
+variable "power_user_role_name" {
+  description = "CyberArk Identity role name for power user access"
   type        = string
 }
 
@@ -50,13 +50,13 @@ variable "cloudops_permission_set_arn" {
   type        = string
 }
 
-variable "audit_group_name" {
-  description = "CyberArk group name for auditors"
+variable "audit_role_name" {
+  description = "CyberArk Identity role name for auditors"
   type        = string
 }
 
-variable "cloudops_group_name" {
-  description = "CyberArk group name for cloud ops"
+variable "cloudops_role_name" {
+  description = "CyberArk Identity role name for cloud ops"
   type        = string
 }
 
