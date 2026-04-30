@@ -8,8 +8,8 @@ variable "account_name" {
   type        = string
 }
 
-variable "requester_username" {
-  description = "CyberArk username of the requester"
+variable "power_user_group_name" {
+  description = "CyberArk group name for power user access (replaces per-user principal)"
   type        = string
 }
 

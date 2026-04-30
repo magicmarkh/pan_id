@@ -34,8 +34,8 @@ resource "idsec_policy_cloud_access" "power_user" {
 
   principals = [
     {
-      name = var.requester_username
-      type = "USER"
+      name = var.power_user_group_name
+      type = "GROUP"
     }
   ]
 

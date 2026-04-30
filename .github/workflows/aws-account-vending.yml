@@ -352,7 +352,7 @@ jobs:
           TF_VAR_cyberark_client_secret: ${{ secrets.CYBERARK_CLIENT_SECRET }}
           TF_VAR_account_id: ${{ needs.provision-account.outputs.account_id }}
           TF_VAR_account_name: ${{ needs.parse-request.outputs.account_name }}
-          TF_VAR_requester_username: ${{ needs.parse-request.outputs.requester }}
+          TF_VAR_power_user_group_name: ${{ secrets.CYBERARK_POWERUSER_GROUP }}
           TF_VAR_power_user_permission_set_arn: ${{ secrets.SCA_POWER_USER_PERMISSION_SET_ARN }}
           TF_VAR_audit_permission_set_arn: ${{ secrets.SCA_AUDIT_PERMISSION_SET_ARN }}
           TF_VAR_cloudops_permission_set_arn: ${{ secrets.SCA_CLOUDOPS_PERMISSION_SET_ARN }}
@@ -383,9 +383,9 @@ jobs:
 
               Access policies have been created in CyberArk Identity for account \`${{ needs.provision-account.outputs.account_id }}\`:
 
-              | Policy | Principals |
+              | Policy | Principal |
               |---|---|
-              | **PowerUser** | @${{ needs.parse-request.outputs.requester }} |
+              | **PowerUser** | ${{ secrets.CYBERARK_POWERUSER_GROUP }} (group) |
               | **Audit** | ${{ secrets.CYBERARK_AUDITOR_GROUP }} (group) |
               | **CloudOps** | ${{ secrets.CYBERARK_CLOUDOPS_GROUP }} (group) |
 
