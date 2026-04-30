@@ -84,8 +84,9 @@ pan_id/
 | Secret | Description |
 |---|---|
 | `CYBERARK_TENANT_URL` | CyberArk tenant URL e.g. `https://abc1234.id.cyberark.cloud` |
-| `CYBERARK_CLIENT_ID` | OAuth2 service account client ID |
-| `CYBERARK_CLIENT_SECRET` | OAuth2 service account client secret |
+| `CYBERARK_SUBDOMAIN` | Tenant subdomain only e.g. `abc1234` (used by idsec Terraform provider) |
+| `CYBERARK_CLIENT_ID` | OAuth2 service account client ID (`service_user` in idsec provider) |
+| `CYBERARK_CLIENT_SECRET` | OAuth2 service account client secret (`service_token` in idsec provider) |
 | `AWS_MANAGEMENT_ACCOUNT_ID` | 12-digit management account ID (used to construct IAM role ARNs) |
 | `AWS_POOL_OU_ID` | OU ID containing pre-staged lab accounts |
 | `AWS_ACTIVE_OU_ID` | OU ID where assigned/active accounts live |
