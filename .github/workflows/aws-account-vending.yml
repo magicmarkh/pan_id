@@ -355,8 +355,8 @@ jobs:
           TF_VAR_power_user_permission_set_arn: ${{ secrets.SCA_POWER_USER_PERMISSION_SET_ARN }}
           TF_VAR_audit_permission_set_arn: ${{ secrets.SCA_AUDIT_PERMISSION_SET_ARN }}
           TF_VAR_cloudops_permission_set_arn: ${{ secrets.SCA_CLOUDOPS_PERMISSION_SET_ARN }}
-          TF_VAR_audit_group_name: ${{ secrets.SCA_AUDIT_GROUP_NAME }}
-          TF_VAR_cloudops_group_name: ${{ secrets.SCA_CLOUDOPS_GROUP_NAME }}
+          TF_VAR_audit_group_name: ${{ secrets.CYBERARK_AUDITOR_GROUP }}
+          TF_VAR_cloudops_group_name: ${{ secrets.CYBERARK_CLOUDOPS_GROUP }}
         run: terraform apply -auto-approve -no-color
 
       - name: Upload SCA Terraform state
@@ -385,8 +385,8 @@ jobs:
               | Policy | Principals |
               |---|---|
               | **PowerUser** | @${{ needs.parse-request.outputs.requester }} |
-              | **Audit** | ${{ secrets.SCA_AUDIT_GROUP_NAME }} (group) |
-              | **CloudOps** | ${{ secrets.SCA_CLOUDOPS_GROUP_NAME }} (group) |
+              | **Audit** | ${{ secrets.CYBERARK_AUDITOR_GROUP }} (group) |
+              | **CloudOps** | ${{ secrets.CYBERARK_CLOUDOPS_GROUP }} (group) |
 
               Access is available via CyberArk Secure Cloud Access. Sessions limited to 1 hour, Mon–Fri 08:00–18:00 UTC.`
             });

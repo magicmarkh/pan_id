@@ -138,8 +138,8 @@ jobs:
           TF_VAR_power_user_permission_set_arn: ${{ secrets.SCA_POWER_USER_PERMISSION_SET_ARN }}
           TF_VAR_audit_permission_set_arn: ${{ secrets.SCA_AUDIT_PERMISSION_SET_ARN }}
           TF_VAR_cloudops_permission_set_arn: ${{ secrets.SCA_CLOUDOPS_PERMISSION_SET_ARN }}
-          TF_VAR_audit_group_name: ${{ secrets.SCA_AUDIT_GROUP_NAME }}
-          TF_VAR_cloudops_group_name: ${{ secrets.SCA_CLOUDOPS_GROUP_NAME }}
+          TF_VAR_audit_group_name: ${{ secrets.CYBERARK_AUDITOR_GROUP }}
+          TF_VAR_cloudops_group_name: ${{ secrets.CYBERARK_CLOUDOPS_GROUP }}
         run: terraform destroy -auto-approve -no-color
 
       - name: No SCA state found
