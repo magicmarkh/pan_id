@@ -23,6 +23,7 @@ body:
 
       '
     options:
+    - test-2 | 210806259509
     - jde-idc-dev | 128327517575
   validations:
     required: true
