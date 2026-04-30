@@ -34,7 +34,7 @@ resource "idsec_policy_cloud_access" "power_user" {
   principals = [
     {
       name = var.power_user_group_name
-      type = "GROUP"
+      type = "ROLE"
     }
   ]
 
@@ -71,7 +71,7 @@ resource "idsec_policy_cloud_access" "audit" {
   principals = [
     {
       name = var.audit_group_name
-      type = "GROUP"
+      type = "ROLE"
     }
   ]
 
@@ -108,7 +108,7 @@ resource "idsec_policy_cloud_access" "cloudops" {
   principals = [
     {
       name = var.cloudops_group_name
-      type = "GROUP"
+      type = "ROLE"
     }
   ]
 

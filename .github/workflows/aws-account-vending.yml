@@ -359,7 +359,25 @@ jobs:
           TF_VAR_cloudops_permission_set_arn: ${{ secrets.SCA_CLOUDOPS_PERMISSION_SET_ARN }}
           TF_VAR_audit_group_name: ${{ secrets.CYBERARK_AUDITOR_GROUP }}
           TF_VAR_cloudops_group_name: ${{ secrets.CYBERARK_CLOUDOPS_GROUP }}
+          TF_LOG: DEBUG
+          TF_LOG_PATH: /tmp/tf-debug.log
         run: terraform apply -auto-approve -no-color
+
+      - name: Surface SCA API error response (debug)
+        if: failure()
+        run: |
+          if [ ! -s /tmp/tf-debug.log ]; then
+            echo "No debug log captured."
+            exit 0
+          fi
+          echo "===== request bodies sent ====="
+          grep -n -B 1 -A 50 -E '"(metadata|principals|targets|conditions)"' /tmp/tf-debug.log | head -300 || echo "(no matches)"
+          echo
+          echo "===== HTTP responses with 4xx/5xx ====="
+          grep -n -B 5 -A 60 -E 'HTTP/[12]\.[01] [45][0-9]{2}|"code":[ ]?[45][0-9]{2}|"faultCode":[ ]?[45][0-9]{2}' /tmp/tf-debug.log | head -500 || echo "(no matches)"
+          echo
+          echo "===== last 200 lines ====="
+          tail -200 /tmp/tf-debug.log
 
       - name: Upload SCA Terraform state
         if: success()
