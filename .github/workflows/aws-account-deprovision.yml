@@ -8,7 +8,7 @@ permissions:
   issues: write
   contents: read
   id-token: write
-  actions: read
+  actions: write
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -158,13 +158,16 @@ jobs:
 
           echo "Current parent: $CURRENT_PARENT"
 
-          # Move back to pool OU
-          aws organizations move-account \
-            --account-id "$ACCOUNT_ID" \
-            --source-parent-id "$CURRENT_PARENT" \
-            --destination-parent-id "$POOL_OU_ID"
-
-          echo "✅ Moved account back to pool OU"
+          # Move back to pool OU (skip if already there)
+          if [ "$CURRENT_PARENT" = "$POOL_OU_ID" ]; then
+            echo "⚠️ Account is already in pool OU — skipping move"
+          else
+            aws organizations move-account \
+              --account-id "$ACCOUNT_ID" \
+              --source-parent-id "$CURRENT_PARENT" \
+              --destination-parent-id "$POOL_OU_ID"
+            echo "✅ Moved account back to pool OU"
+          fi
 
           # Reset tags — strip assignment metadata, restore Available status
           aws organizations untag-resource \
@@ -220,6 +223,20 @@ jobs:
               state: 'closed',
               labels: ['deprovision-aws-account', 'returned-to-pool']
             });
+
+      - name: Trigger Refresh Issue Templates
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'refresh-issue-templates.yml',
+              ref: context.ref
+            });
+            console.log('Triggered Refresh Issue Templates workflow');
 
       - name: Comment Failure on Issue
         if: failure()
