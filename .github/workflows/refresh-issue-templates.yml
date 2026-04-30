@@ -76,34 +76,20 @@ jobs:
           echo "available_accounts=$AVAILABLE_JSON" >> $GITHUB_OUTPUT
           echo "Found $(echo "$AVAILABLE_JSON" | jq length) available pool accounts"
 
-      - name: Query all deprovisionable accounts
+      - name: Query active OU accounts (deprovisionable)
         id: active_accounts
         run: |
-          MGMT_ACCOUNT_ID="${{ secrets.AWS_MANAGEMENT_ACCOUNT_ID }}"
-          UNUSED_OU_ID="${{ secrets.AWS_UNUSED_OU_ID }}"
+          ACTIVE_OU_ID="${{ secrets.AWS_ACTIVE_OU_ID }}"
 
-          # Build exclusion set from the Unused OU (accounts not yet configured)
-          UNUSED_IDS=$(aws organizations list-accounts-for-parent \
-            --parent-id "$UNUSED_OU_ID" \
-            --query 'Accounts[*].Id' \
-            --output text | tr '\t' '\n')
-
-          ACCOUNT_IDS=$(aws organizations list-accounts \
+          # Two-OU model: only accounts currently in the active OU are deprovisionable.
+          # Accounts in other OUs (other demo environments) are intentionally excluded.
+          ACCOUNT_IDS=$(aws organizations list-accounts-for-parent \
+            --parent-id "$ACTIVE_OU_ID" \
             --query 'Accounts[?Status==`ACTIVE`].Id' \
             --output text)
 
           ACTIVE_JSON="[]"
           for ACCOUNT_ID in $ACCOUNT_IDS; do
-            # Skip management account
-            if [ "$ACCOUNT_ID" = "$MGMT_ACCOUNT_ID" ]; then
-              continue
-            fi
-
-            # Skip accounts sitting in the Unused OU
-            if echo "$UNUSED_IDS" | grep -qx "$ACCOUNT_ID"; then
-              continue
-            fi
-
             NAME=$(aws organizations describe-account \
               --account-id "$ACCOUNT_ID" \
               --query 'Account.Name' \
@@ -113,7 +99,7 @@ jobs:
           done
 
           echo "active_accounts=$ACTIVE_JSON" >> $GITHUB_OUTPUT
-          echo "Found $(echo "$ACTIVE_JSON" | jq length) deprovisionable accounts"
+          echo "Found $(echo "$ACTIVE_JSON" | jq length) deprovisionable accounts in active OU"
 
       - name: Query available target OUs
         id: target_ous
