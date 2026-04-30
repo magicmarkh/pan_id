@@ -149,12 +149,19 @@ jobs:
         run: |
           ACCOUNT_ID="${{ needs.parse-request.outputs.account_id }}"
           POOL_OU_ID="${{ secrets.AWS_POOL_OU_ID }}"
-          ACTIVE_OU_ID="${{ secrets.AWS_ACTIVE_OU_ID }}"
+
+          # Dynamically find the account's current parent — works regardless of which OU it's in
+          CURRENT_PARENT=$(aws organizations list-parents \
+            --child-id "$ACCOUNT_ID" \
+            --query 'Parents[0].Id' \
+            --output text)
+
+          echo "Current parent: $CURRENT_PARENT"
 
           # Move back to pool OU
           aws organizations move-account \
             --account-id "$ACCOUNT_ID" \
-            --source-parent-id "$ACTIVE_OU_ID" \
+            --source-parent-id "$CURRENT_PARENT" \
             --destination-parent-id "$POOL_OU_ID"
 
           echo "✅ Moved account back to pool OU"

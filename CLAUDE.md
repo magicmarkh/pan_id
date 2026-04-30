@@ -53,7 +53,7 @@ GitHub Issue Form → GitHub Actions → [production gate]
 - **Dropdown freshness:** `refresh-issue-templates.yml` workflow queries AWS and rewrites YAML daily; option format is `"Name | ID"` so workflows can parse the ID back with `awk`
 - **SCA policy state:** GitHub Actions artifact (not S3) — sufficient for demo lifecycle (90-day retention)
 - **Terraform state for account vending:** Local (S3 backend stubbed and commented in `main.tf`)
-- **idsec provider version:** `cyberark/idsec ~> 1.0`
+- **idsec provider version:** `cyberark/idsec >= 0.1.0`
 - **AWS provider version:** `hashicorp/aws ~> 5.0`
 - **Terraform version:** `>= 1.7.0`
 
