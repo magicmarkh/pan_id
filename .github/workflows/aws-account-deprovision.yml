@@ -186,46 +186,6 @@ jobs:
 
           echo "✅ Deprovisioning complete"
 
-      - name: Revoke CyberArk access roles (Simulate)
-        if: needs.parse-request.outputs.mode == 'Simulate'
-        env:
-          ACCOUNT_ID: ${{ needs.parse-request.outputs.account_id }}
-          TENANT_URL: ${{ secrets.CYBERARK_TENANT_URL }}
-        run: |
-          # Obtain token
-          RESPONSE=$(curl -s -X POST \
-            "${TENANT_URL}/oauth2/platformtoken" \
-            -H "Content-Type: application/x-www-form-urlencoded" \
-            -d "grant_type=client_credentials&client_id=${{ secrets.CYBERARK_CLIENT_ID }}&client_secret=${{ secrets.CYBERARK_CLIENT_SECRET }}")
-
-          TOKEN=$(echo "$RESPONSE" | jq -r '.access_token // empty')
-          if [ -z "$TOKEN" ]; then
-            echo "⚠️ Could not obtain CyberArk token — skipping role revocation (non-fatal)"
-            exit 0
-          fi
-          echo "::add-mask::$TOKEN"
-
-          BASE_URL="${TENANT_URL}/api/idadmin"
-          AUTH_HEADER="Authorization: Bearer ${TOKEN}"
-
-          # Fetch role IDs by name pattern and delete them
-          for SUFFIX in poweruser audit cloudopsadmin; do
-            # Get role ID by name (search)
-            ROLE_NAME="aws-*-${SUFFIX}"
-            ROLES=$(curl -s -X POST "${BASE_URL}/Roles/GetRolesAndRightsForCurrentUser" \
-              -H "$AUTH_HEADER" -H "Content-Type: application/json" \
-              -d "{}" | jq -r --arg pat "aws-" '.Result[]? | select(.Name | startswith($pat)) | select(.Name | endswith("'"${SUFFIX}"'")) | .ID // empty')
-
-            for ROLE_ID in $ROLES; do
-              curl -s -X POST "${BASE_URL}/Roles/DeleteRole" \
-                -H "$AUTH_HEADER" -H "Content-Type: application/json" \
-                -d "{\"ID\":\"${ROLE_ID}\"}" > /dev/null
-              echo "✅ Deleted CyberArk role: $ROLE_ID"
-            done
-          done
-
-          echo "✅ CyberArk role cleanup complete (or no roles found)"
-
       - name: Comment Success on Issue
         if: success()
         uses: actions/github-script@v7
@@ -243,11 +203,8 @@ jobs:
               repo: context.repo.repo,
               body: `### ✅ Account Returned to Pool
 
-              Account \`${{ needs.parse-request.outputs.account_id }}\` has been
-              returned to the lab pool, tagged **Available**, and CyberArk access
-              roles have been revoked.
-
-              The account is ready for the next demo.`
+              Account \`${{ needs.parse-request.outputs.account_id }}\` has been deprovisioned:
+              - ✅ Returned to lab pool (tagged Available)${scaNote}`
             });
 
       - name: Close Issue
