@@ -1,5 +1,4 @@
 variable "account_id" {
-  description = "AWS account ID of the provisioned account"
   description = "12-digit AWS account ID"
   type        = string
 }
