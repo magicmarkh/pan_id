@@ -204,35 +204,40 @@ The `refresh-issue-templates.yml` workflow reads these tags to populate dropdown
 - Available versions: `0.1.x`–`0.2.x` only (NO `1.x` releases). Use constraint `>= 0.1.0`
 - Provider block uses `auth_method = "identity_service_user"`, `service_user`, `service_token`, `subdomain`
 
-### `idsec_policy_cloud_access` schema (verified via `terraform providers schema -json`)
-**`metadata` (object, required for `name` and `policy_entitlement`)**
-- `name` (required, string)
-- `description` (optional, string, max 200 chars)
-- `policy_entitlement` (required, object):
-  - `target_category` (required) — `"Cloud console"` for AWS console access
-  - `location_type` (required) — `"AWS"`, `"Azure"`, or `"GCP"`
-  - `policy_type` (optional) — `"Recurring"` or `"OnDemand"`
-- `time_zone` (optional, default `"GMT"`)
-- `time_frame.from_time` / `to_time` (optional ISO 8601 `yyyy-MM-ddTHH:mm:ss`)
-- `status`, `created_by`, `updated_on`, `policy_id` are **computed/read-only** — DO NOT set
-- The resource has **no top-level `id` attribute**. The policy ID is `<resource>.metadata.policy_id`
+### `idsec_policy_cloud_access` schema (verified against working policy from CyberArk SE)
 
-**`delegation_classification`** (optional, string, default `"Unrestricted"`)
-- Valid values: `"Unrestricted"`, `"Restricted"` — NOT `"Privileged"`
+The schema as actually accepted by the SCA API differs in several ways from the
+provider's terraform-plugin-framework JSON dump — the dump describes what's
+*parseable*, not what the server *accepts*. Use this section as the source of
+truth; it reflects a payload that creates a policy successfully.
+
+**`metadata`**
+- `name` (required, string)
+- `description` (optional, string)
+- `status = { status = "Active" }` (required to create an enabled policy)
+- `policy_entitlement` (required):
+  - `target_category` = `"Cloud console"` for AWS console access
+  - `location_type` = `"AWS"` / `"Azure"` / `"GCP"`
+  - **DO NOT set `policy_type`** — server 500s
+- `time_zone` (optional) — IANA name e.g. `"America/New_York"`, `"Etc/UTC"`. NOT `"UTC"` (server 500s) and NOT `"GMT"`
+- `policy_tags` (optional, list of string)
 
 **`principals`** (list of objects)
-- `name`, `type` (`USER`/`GROUP`/`ROLE` — **uppercase**), optional `id`, `source_directory_id`, `source_directory_name`
+- `name`, `type` (`USER` / `GROUP` / `ROLE` — uppercase). `source_directory_id` is optional and the server resolves the directory if omitted
 
-**`targets.aws_account_targets`** (list of objects)
-- `role_id` (required) = IAM Identity Center **permission set ARN** (NOT an IAM role ARN — SCA federates through IAM Identity Center)
-- `workspace_id` (required) = 12-digit AWS account ID
+**`targets`**
+- Use `aws_organization_targets` for AWS console access (NOT `aws_account_targets` — that path 500s):
+  - `role_id` (required) = IAM Identity Center permission set ARN
+  - `workspace_id` (required) = 12-digit AWS account ID
+  - `org_id` (required) = the AWS Organizations *management account ID* (12 digits, NOT `o-xxxx` org ID)
 
-**`conditions`** (object)
-- `max_session_duration` (number, **HOURS** not seconds, default 1)
-- `access_window` (object):
-  - `days_of_the_week` — set of numbers (Sun=0, Mon=1, …, Sat=6)
-  - `from_hour` / `to_hour` — ISO 8601 datetimes (date portion ignored for recurring policies)
-- There is NO `time_restrictions` attribute, NO `enforcement_type`, NO string `days` array
+**`conditions`**
+- `max_session_duration` (number, hours, default 1)
+- `access_window`:
+  - `days_of_the_week` — list of numbers, Mon=1 … Sun=7 (NOT Sun=0)
+  - `from_hour` / `to_hour` — `HH:MM:SS` strings (NOT ISO 8601 datetimes — server 500s on those)
+
+**`delegation_classification`** (optional) — `"Unrestricted"` or `"Restricted"`
 
 ## Agent Instructions (Claude Code)
 

@@ -21,6 +21,7 @@ module "cyberark_policy" {
 
   account_id                    = var.account_id
   account_name                  = var.account_name
+  org_management_account_id     = var.org_management_account_id
   power_user_group_name         = var.power_user_group_name
   power_user_permission_set_arn = var.power_user_permission_set_arn
   audit_permission_set_arn      = var.audit_permission_set_arn

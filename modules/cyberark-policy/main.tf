@@ -10,11 +10,10 @@ terraform {
 }
 
 locals {
-  # Mon-Fri 08:00-18:00 UTC. Date portion is ignored for recurring policies.
   access_window = {
     days_of_the_week = [1, 2, 3, 4, 5]
-    from_hour        = "2024-01-01T08:00:00"
-    to_hour          = "2024-01-01T18:00:00"
+    from_hour        = var.access_window_from_hour
+    to_hour          = var.access_window_to_hour
   }
 }
 
@@ -22,15 +21,15 @@ resource "idsec_policy_cloud_access" "power_user" {
   metadata = {
     name        = "aws-${var.account_name}-poweruser"
     description = "Power user access to ${var.account_name} (${var.account_id})"
+    status = {
+      status = "Active"
+    }
     policy_entitlement = {
       target_category = "Cloud console"
       location_type   = "AWS"
-      policy_type     = "Recurring"
     }
-    time_zone = "UTC"
+    time_zone = var.time_zone
   }
-
-  delegation_classification = "Unrestricted"
 
   principals = [
     {
@@ -39,18 +38,19 @@ resource "idsec_policy_cloud_access" "power_user" {
     }
   ]
 
-  targets = {
-    aws_account_targets = [
-      {
-        role_id      = var.power_user_permission_set_arn
-        workspace_id = var.account_id
-      }
-    ]
-  }
-
   conditions = {
     max_session_duration = var.max_session_duration
     access_window        = local.access_window
+  }
+
+  targets = {
+    aws_organization_targets = [
+      {
+        role_id      = var.power_user_permission_set_arn
+        workspace_id = var.account_id
+        org_id       = var.org_management_account_id
+      }
+    ]
   }
 }
 
@@ -58,15 +58,15 @@ resource "idsec_policy_cloud_access" "audit" {
   metadata = {
     name        = "aws-${var.account_name}-audit"
     description = "Read-only audit access to ${var.account_name} (${var.account_id})"
+    status = {
+      status = "Active"
+    }
     policy_entitlement = {
       target_category = "Cloud console"
       location_type   = "AWS"
-      policy_type     = "Recurring"
     }
-    time_zone = "UTC"
+    time_zone = var.time_zone
   }
-
-  delegation_classification = "Unrestricted"
 
   principals = [
     {
@@ -75,18 +75,19 @@ resource "idsec_policy_cloud_access" "audit" {
     }
   ]
 
-  targets = {
-    aws_account_targets = [
-      {
-        role_id      = var.audit_permission_set_arn
-        workspace_id = var.account_id
-      }
-    ]
-  }
-
   conditions = {
     max_session_duration = var.max_session_duration
     access_window        = local.access_window
+  }
+
+  targets = {
+    aws_organization_targets = [
+      {
+        role_id      = var.audit_permission_set_arn
+        workspace_id = var.account_id
+        org_id       = var.org_management_account_id
+      }
+    ]
   }
 }
 
@@ -94,15 +95,15 @@ resource "idsec_policy_cloud_access" "cloudops" {
   metadata = {
     name        = "aws-${var.account_name}-cloudops"
     description = "Cloud ops admin access to ${var.account_name} (${var.account_id})"
+    status = {
+      status = "Active"
+    }
     policy_entitlement = {
       target_category = "Cloud console"
       location_type   = "AWS"
-      policy_type     = "Recurring"
     }
-    time_zone = "UTC"
+    time_zone = var.time_zone
   }
-
-  delegation_classification = "Unrestricted"
 
   principals = [
     {
@@ -111,17 +112,18 @@ resource "idsec_policy_cloud_access" "cloudops" {
     }
   ]
 
-  targets = {
-    aws_account_targets = [
-      {
-        role_id      = var.cloudops_permission_set_arn
-        workspace_id = var.account_id
-      }
-    ]
-  }
-
   conditions = {
     max_session_duration = var.max_session_duration
     access_window        = local.access_window
+  }
+
+  targets = {
+    aws_organization_targets = [
+      {
+        role_id      = var.cloudops_permission_set_arn
+        workspace_id = var.account_id
+        org_id       = var.org_management_account_id
+      }
+    ]
   }
 }
