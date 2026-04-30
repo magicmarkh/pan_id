@@ -158,13 +158,16 @@ jobs:
 
           echo "Current parent: $CURRENT_PARENT"
 
-          # Move back to pool OU
-          aws organizations move-account \
-            --account-id "$ACCOUNT_ID" \
-            --source-parent-id "$CURRENT_PARENT" \
-            --destination-parent-id "$POOL_OU_ID"
-
-          echo "✅ Moved account back to pool OU"
+          # Move back to pool OU (skip if already there)
+          if [ "$CURRENT_PARENT" = "$POOL_OU_ID" ]; then
+            echo "⚠️ Account is already in pool OU — skipping move"
+          else
+            aws organizations move-account \
+              --account-id "$ACCOUNT_ID" \
+              --source-parent-id "$CURRENT_PARENT" \
+              --destination-parent-id "$POOL_OU_ID"
+            echo "✅ Moved account back to pool OU"
+          fi
 
           # Reset tags — strip assignment metadata, restore Available status
           aws organizations untag-resource \
