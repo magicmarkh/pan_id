@@ -1,5 +1,21 @@
+variable "cyberark_subdomain" {
+  description = "CyberArk Identity tenant subdomain (e.g. 'abc1234' from abc1234.id.cyberark.cloud)"
+  type        = string
+}
+
+variable "cyberark_client_id" {
+  description = "CyberArk Identity service user (OAuth2 client ID / app ID)"
+  type        = string
+  sensitive   = true
+}
+
+variable "cyberark_client_secret" {
+  description = "CyberArk Identity service token (OAuth2 client secret)"
+  type        = string
+  sensitive   = true
+}
+
 variable "account_id" {
-  description = "AWS account ID of the provisioned account"
   description = "12-digit AWS account ID"
   type        = string
 }

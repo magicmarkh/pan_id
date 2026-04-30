@@ -76,18 +76,34 @@ jobs:
           echo "available_accounts=$AVAILABLE_JSON" >> $GITHUB_OUTPUT
           echo "Found $(echo "$AVAILABLE_JSON" | jq length) available pool accounts"
 
-      - name: Query active (InUse) accounts
+      - name: Query all deprovisionable accounts
         id: active_accounts
         run: |
-          ACTIVE_OU_ID="${{ secrets.AWS_ACTIVE_OU_ID }}"
+          MGMT_ACCOUNT_ID="${{ secrets.AWS_MANAGEMENT_ACCOUNT_ID }}"
+          UNUSED_OU_ID="${{ secrets.AWS_UNUSED_OU_ID }}"
 
-          ACCOUNT_IDS=$(aws organizations list-accounts-for-parent \
-            --parent-id "$ACTIVE_OU_ID" \
+          # Build exclusion set from the Unused OU (accounts not yet configured)
+          UNUSED_IDS=$(aws organizations list-accounts-for-parent \
+            --parent-id "$UNUSED_OU_ID" \
+            --query 'Accounts[*].Id' \
+            --output text | tr '\t' '\n')
+
+          ACCOUNT_IDS=$(aws organizations list-accounts \
             --query 'Accounts[?Status==`ACTIVE`].Id' \
             --output text)
 
           ACTIVE_JSON="[]"
           for ACCOUNT_ID in $ACCOUNT_IDS; do
+            # Skip management account
+            if [ "$ACCOUNT_ID" = "$MGMT_ACCOUNT_ID" ]; then
+              continue
+            fi
+
+            # Skip accounts sitting in the Unused OU
+            if echo "$UNUSED_IDS" | grep -qx "$ACCOUNT_ID"; then
+              continue
+            fi
+
             NAME=$(aws organizations describe-account \
               --account-id "$ACCOUNT_ID" \
               --query 'Account.Name' \
@@ -97,7 +113,7 @@ jobs:
           done
 
           echo "active_accounts=$ACTIVE_JSON" >> $GITHUB_OUTPUT
-          echo "Found $(echo "$ACTIVE_JSON" | jq length) active accounts"
+          echo "Found $(echo "$ACTIVE_JSON" | jq length) deprovisionable accounts"
 
       - name: Query available target OUs
         id: target_ous
@@ -154,7 +170,7 @@ jobs:
           )
           active_options = (
               [f"{a['name']} | {a['id']}" for a in active_accounts]
-              or ["No active accounts in the active OU"]
+              or ["No accounts found — check AWS Organizations"]
           )
           ou_options = (
               [f"{o['name']} | {o['id']}" for o in target_ous]
