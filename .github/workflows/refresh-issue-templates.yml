@@ -14,6 +14,13 @@ on:
   schedule:
     # Refresh daily at 06:00 UTC — ensures templates are up-to-date before demos
     - cron: "0 6 * * *"
+  workflow_run:
+    # Re-sync dropdowns any time provisioning or deprovisioning completes
+    workflows:
+      - "AWS Account Vending"
+      - "AWS Account Deprovisioning"
+    types:
+      - completed
 
 permissions:
   contents: write
