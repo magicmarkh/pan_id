@@ -8,6 +8,7 @@ permissions:
   issues: write
   contents: read
   id-token: write
+  actions: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -62,6 +63,86 @@ jobs:
           aws-region: us-east-1
           role-session-name: GitHubActions-Deprovision-${{ github.run_id }}
 
+      - name: Find SCA state artifact
+        id: find_sca_state
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const accountId = "${{ needs.parse-request.outputs.account_id }}";
+            const artifactName = `sca-tfstate-${accountId}`;
+
+            const { data } = await github.rest.actions.listArtifactsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: artifactName,
+              per_page: 10
+            });
+
+            const active = data.artifacts
+              .filter(a => !a.expired)
+              .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+            if (active.length === 0) {
+              core.warning(`No active SCA state artifact found for account ${accountId} — skipping policy removal`);
+              core.setOutput('found', 'false');
+              return;
+            }
+
+            core.setOutput('found', 'true');
+            core.setOutput('run_id', String(active[0].workflow_run.id));
+            console.log(`Found artifact ${artifactName} from run ${active[0].workflow_run.id}`);
+
+      - name: Download SCA Terraform state
+        if: steps.find_sca_state.outputs.found == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: sca-tfstate-${{ needs.parse-request.outputs.account_id }}
+          path: ./use-cases/cyberark-sca-policy
+          run-id: ${{ steps.find_sca_state.outputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Terraform
+        if: steps.find_sca_state.outputs.found == 'true'
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.14.9"
+
+      - name: Terraform Init (SCA Policies)
+        if: steps.find_sca_state.outputs.found == 'true'
+        working-directory: ./use-cases/cyberark-sca-policy
+        run: terraform init
+
+      - name: Parse account name from selection
+        if: steps.find_sca_state.outputs.found == 'true'
+        id: parse_account_name
+        run: |
+          # Dropdown format: "Account Name | 123456789012" — extract the name part
+          SELECTION="${{ needs.parse-request.outputs.active_account }}"
+          ACCOUNT_NAME=$(echo "$SELECTION" | awk -F' | ' '{print $1}' | xargs)
+          echo "account_name=$ACCOUNT_NAME" >> $GITHUB_OUTPUT
+
+      - name: Terraform Destroy (SCA Policies)
+        if: steps.find_sca_state.outputs.found == 'true'
+        working-directory: ./use-cases/cyberark-sca-policy
+        env:
+          TF_VAR_cyberark_tenant_url: ${{ secrets.CYBERARK_TENANT_URL }}
+          TF_VAR_cyberark_client_id: ${{ secrets.CYBERARK_CLIENT_ID }}
+          TF_VAR_cyberark_client_secret: ${{ secrets.CYBERARK_CLIENT_SECRET }}
+          TF_VAR_account_id: ${{ needs.parse-request.outputs.account_id }}
+          TF_VAR_account_name: ${{ steps.parse_account_name.outputs.account_name }}
+          TF_VAR_requester_username: placeholder
+          TF_VAR_power_user_permission_set_arn: ${{ secrets.SCA_POWER_USER_PERMISSION_SET_ARN }}
+          TF_VAR_audit_permission_set_arn: ${{ secrets.SCA_AUDIT_PERMISSION_SET_ARN }}
+          TF_VAR_cloudops_permission_set_arn: ${{ secrets.SCA_CLOUDOPS_PERMISSION_SET_ARN }}
+          TF_VAR_audit_group_name: ${{ secrets.SCA_AUDIT_GROUP_NAME }}
+          TF_VAR_cloudops_group_name: ${{ secrets.SCA_CLOUDOPS_GROUP_NAME }}
+        run: terraform destroy -auto-approve -no-color
+
+      - name: No SCA state found
+        if: steps.find_sca_state.outputs.found != 'true'
+        run: echo "⚠️ No SCA policies state found — skipping policy removal"
+
       - name: Return account to pool (Simulate)
         if: needs.parse-request.outputs.mode == 'Simulate'
         id: return_account
@@ -104,14 +185,19 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
+            const scaRemoved = "${{ steps.find_sca_state.outputs.found }}" === "true";
+            const scaNote = scaRemoved
+              ? "\n- 🔐 CyberArk SCA policies removed"
+              : "\n- ⚠️ No CyberArk SCA state found — policies may need manual cleanup";
+
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: `### ✅ Account Returned to Pool
 
-              Account \`${{ needs.parse-request.outputs.account_id }}\` has been
-              returned to the lab pool and is available for future demos.`
+              Account \`${{ needs.parse-request.outputs.account_id }}\` has been deprovisioned:
+              - ✅ Returned to lab pool (tagged Available)${scaNote}`
             });
 
       - name: Close Issue

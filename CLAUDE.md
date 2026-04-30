@@ -1,4 +1,4 @@
-# Project: coud_demos — CyberArk Identity Scaling Demos
+# Project: pan_id — CyberArk Identity Scaling Demos
 
 ## What This Repo Is
 Closed-loop automation demo repository using CyberArk Identity (idsec Terraform provider),
@@ -7,9 +7,18 @@ demos can be stitched together to add capability incrementally.
 
 ## Architecture Pattern
 ```
-GitHub Issue Form → GitHub Actions → CyberArk Identity (OAuth2 AuthN)
-  → Terraform (idsec + AWS provider) → AWS Organization
-      → Outputs stored back to CyberArk → Comment on Issue → Close Issue
+GitHub Issue Form → GitHub Actions → [production gate: human approval]
+  → AWS Organizations (OIDC) → account assigned/created
+  → CyberArk Identity (idsec provider, OAuth2) → SCA policies created
+      → Comment on Issue → Close Issue
+```
+
+Deprovisioning is the full reverse:
+```
+GitHub Issue Form → GitHub Actions → [production gate]
+  → CyberArk Identity → SCA policies destroyed (terraform destroy)
+  → AWS Organizations → account returned to pool
+      → Comment on Issue → Close Issue
 ```
 
 ## Current Use Cases
@@ -18,34 +27,56 @@ GitHub Issue Form → GitHub Actions → CyberArk Identity (OAuth2 AuthN)
 - **Trigger:** GitHub Issue labeled `provision-aws-account`
 - **Form:** `.github/ISSUE_TEMPLATE/aws-account-request.yml`
 - **Pipeline:** `.github/workflows/aws-account-vending.yml`
-- **What it does:** Authenticates to CyberArk, creates a new AWS Organizations account,
-  applies IAM policies, comments result back on the issue, closes it
+- **Modes:**
+  - **Simulate** — assigns a pre-staged pool account (fast, recommended for demos)
+  - **Create** — provisions a real new AWS Organizations account via Terraform
+
+### 2. CyberArk SCA Policies (`use-cases/cyberark-sca-policy/`)
+- **Not triggered directly** — invoked by the vending and deprovisioning workflows
+- Creates three `idsec_policy_cloud_access` resources per account:
+  - `PowerUser` — requester (GitHub issue opener), targets PowerUser permission set
+  - `Audit` — auditors CyberArk group, targets Audit permission set
+  - `CloudOps` — cloud-ops CyberArk group, targets CloudOps permission set
+- Terraform state stored as GitHub Actions artifact `sca-tfstate-{account_id}` (90 days)
+
+### 3. AWS Account Deprovisioning (`use-cases/` — workflow only)
+- **Trigger:** GitHub Issue labeled `deprovision-aws-account`
+- **Form:** `.github/ISSUE_TEMPLATE/aws-account-deprovision.yml`
+- **Pipeline:** `.github/workflows/aws-account-deprovision.yml`
+- Downloads SCA state artifact → `terraform destroy` → returns account to pool OU
 
 ## Key Design Decisions (Already Made — Do Not Revisit Unless Asked)
-- **CyberArk auth method:** OAuth2 confidential client (client_id + client_secret)
-- **AWS credential flow:** Fetched at runtime via CyberArk — no static AWS keys ever in GitHub
-- **Approval gate:** GitHub Environments (`environment: production`) — human approval required before any `terraform apply`
+- **CyberArk SCA auth:** OAuth2 confidential client (client_id + client_secret) via idsec Terraform provider
+- **AWS credential flow:** GitHub OIDC → `GitHubActionsOrgProvisioner` IAM role — no static AWS keys
+- **Approval gate:** GitHub Environments (`environment: production`) on every destructive job
 - **Issue parsing:** `stefanbuck/github-issue-parser@v3` maps issue form fields to job outputs
-- **Terraform state:** Local for now — S3 backend is stubbed and commented out in `use-cases/aws-account-vending/main.tf`, ready to enable
+- **Dropdown freshness:** `refresh-issue-templates.yml` workflow queries AWS and rewrites YAML daily; option format is `"Name | ID"` so workflows can parse the ID back with `awk`
+- **SCA policy state:** GitHub Actions artifact (not S3) — sufficient for demo lifecycle (90-day retention)
+- **Terraform state for account vending:** Local (S3 backend stubbed and commented in `main.tf`)
 - **idsec provider version:** `cyberark/idsec ~> 1.0`
 - **AWS provider version:** `hashicorp/aws ~> 5.0`
 - **Terraform version:** `>= 1.7.0`
 
 ## Repo Structure
 ```
-coud_demos/
+pan_id/
 ├── .github/
 │   ├── ISSUE_TEMPLATE/
-│   │   └── aws-account-request.yml     # Engineer-facing request form
+│   │   ├── aws-account-request.yml       # Provision form (dropdowns refreshed by workflow)
+│   │   └── aws-account-deprovision.yml   # Deprovision form (active accounts dropdown)
 │   └── workflows/
-│       └── aws-account-vending.yml     # Full GitHub Actions pipeline
+│       ├── aws-account-vending.yml       # Provision pipeline (2 jobs: provision + sca)
+│       ├── aws-account-deprovision.yml   # Deprovision pipeline
+│       └── refresh-issue-templates.yml  # Daily dropdown refresh (queries AWS Organizations)
 ├── modules/
-│   ├── cyberark-auth/                  # idsec provider wiring (main.tf, variables.tf)
-│   ├── aws-account/                    # aws_organizations_account resource (main.tf, variables.tf, outputs.tf)
-│   └── aws-iam-policies/               # Phase 2 scaffold (main.tf only, empty)
+│   ├── cyberark-policy/    # idsec_policy_cloud_access × 3 (poweruser, audit, cloudops)
+│   ├── aws-account/        # aws_organizations_account resource
+│   ├── cyberark-auth/      # Stub — kept for reference; auth now via idsec provider directly
+│   └── aws-iam-policies/   # Stub — access via SCA permission sets, not IAM roles
 ├── use-cases/
-│   └── aws-account-vending/            # Root Terraform config (main.tf, variables.tf)
-├── CLAUDE.md                           # This file
+│   ├── aws-account-vending/     # Create mode: Terraform for real AWS account creation
+│   └── cyberark-sca-policy/     # SCA policies: idsec provider only, no AWS
+├── CLAUDE.md
 └── README.md
 ```
 
@@ -55,9 +86,14 @@ coud_demos/
 | `CYBERARK_TENANT_URL` | CyberArk tenant URL e.g. `https://abc1234.id.cyberark.cloud` |
 | `CYBERARK_CLIENT_ID` | OAuth2 service account client ID |
 | `CYBERARK_CLIENT_SECRET` | OAuth2 service account client secret |
-| `AWS_MANAGEMENT_ACCOUNT_ID` | 12-digit management account ID used to construct IAM ARNs |
+| `AWS_MANAGEMENT_ACCOUNT_ID` | 12-digit management account ID (used to construct IAM role ARNs) |
 | `AWS_POOL_OU_ID` | OU ID containing pre-staged lab accounts |
-| `AWS_ACTIVE_OU_ID` | OU ID where active/assigned accounts live |
+| `AWS_ACTIVE_OU_ID` | OU ID where assigned/active accounts live |
+| `SCA_POWER_USER_PERMISSION_SET_ARN` | IAM Identity Center permission set ARN for power user access |
+| `SCA_AUDIT_PERMISSION_SET_ARN` | IAM Identity Center permission set ARN for audit read-only |
+| `SCA_CLOUDOPS_PERMISSION_SET_ARN` | IAM Identity Center permission set ARN for cloud ops admin |
+| `SCA_AUDIT_GROUP_NAME` | CyberArk group name for auditors |
+| `SCA_CLOUDOPS_GROUP_NAME` | CyberArk group name for cloud ops |
 
 ## GitHub Environment Required
 - Environment name: `production`
@@ -71,6 +107,8 @@ Three accounts are pre-staged in the pool OU. Before running simulate mode,
 ensure all three have the following tag applied in AWS Organizations:
 - Key: `Status`, Value: `Available`
 
+The `refresh-issue-templates.yml` workflow reads these tags to populate dropdowns.
+
 ### Labels Required in GitHub
 - `provision-aws-account` — triggers provisioning workflow
 - `provisioned` — applied on successful provisioning
@@ -78,84 +116,58 @@ ensure all three have the following tag applied in AWS Organizations:
 - `returned-to-pool` — applied on successful return to pool
 
 ### Demo Flow
-1. Submit issue → select Simulate → apply `provision-aws-account` label
-2. Approve production gate
-3. Account moves from pool OU to active OU, alias updated, comment on issue
-4. Demo the account
-5. Submit deprovision issue → apply `deprovision-aws-account` label
-6. Account returns to pool, tagged Available, ready for next demo
+1. Run **Refresh Issue Templates** workflow (or wait for daily 06:00 UTC run)
+2. Open new issue → **AWS Account Request** template
+3. Select **Simulate**, choose a pool account from the dropdown
+4. Apply label `provision-aws-account`
+5. Approve the `production` gate
+6. Account moves from pool OU → active OU, tagged InUse
+7. CyberArk SCA policies created for PowerUser / Audit / CloudOps
+8. Issue commented with account details + SCA policy table, then closed
+9. Demo the account (access via CyberArk Secure Cloud Access)
+10. Open new issue → **AWS Account Deprovision Request**
+11. Select the account from the dropdown, apply `deprovision-aws-account`
+12. Approve the `production` gate
+13. SCA policies destroyed, account returned to pool, tagged Available
+14. Issue commented and closed
 
-## AWS Prerequisites (Not Yet Configured)
+## AWS Prerequisites
 - AWS Organizations management account must exist
-- IAM role `GitHubActionsOrgProvisioner` needed in management account
-- `GitHubActionsOrgProvisioner` IAM role must have `AWSOrganizationsFullAccess` managed policy attached (least-privilege refinement deferred)
-- The role also requires `organizations:ListAccounts` for the duplicate account name check step
-- Trust policy for that role: not yet written — next item to build
-- Required permissions: `organizations:CreateAccount`, `organizations:ListAccounts`, `iam:*`, `sso:*`
+- IAM role `GitHubActionsOrgProvisioner` in management account with:
+  - Trust policy: GitHub OIDC (`token.actions.githubusercontent.com`)
+  - Permissions: `AWSOrganizationsFullAccess` + `iam:CreateAccountAlias`, `iam:DeleteAccountAlias`, `iam:ListAccountAliases`
+- IAM Identity Center permission sets pre-created for PowerUser, Audit, CloudOps
+- Pool accounts pre-staged with `Status = Available` tag
 
 ## What's Built
-- [x] GitHub Issue form (aws-account-request.yml)
-- [x] GitHub Actions workflow (parse → approve → auth → terraform)
-- [x] OIDC authentication to AWS (no static keys)
-- [x] Duplicate account name guard
-- [x] `modules/aws-account/` — creates `aws_organizations_account` (CloudTrail/GuardDuty deferred to Phase 2)
-- [x] CyberArk auth module scaffold
-- [x] IAM policies module scaffold
-- [x] Use-case root Terraform config
-- [x] README.md
-- [x] Lab simulation mode — recycles pool accounts instead of creating new ones
-- [x] Deprovisioning workflow — returns simulated accounts to pool
-- [x] Account availability tracked via AWS resource tags (`Status = Available/InUse`)
+- [x] GitHub Issue forms with dynamic dropdowns (refreshed daily from AWS)
+- [x] Dropdown refresh workflow — queries pool OU, active OU, and org root OUs
+- [x] Simulate mode — assigns pre-staged pool accounts via AWS Organizations tags + move
+- [x] Create mode — provisions real AWS account via `aws_organizations_account` Terraform resource
+- [x] Duplicate account name guard (Create mode)
+- [x] OIDC authentication to AWS — no static keys
+- [x] Human approval gate via GitHub Environments
+- [x] CyberArk SCA policies — `idsec_policy_cloud_access` for PowerUser / Audit / CloudOps
+- [x] SCA policy state persisted as GitHub Actions artifact for deprovision
+- [x] Deprovisioning workflow — destroys SCA policies then returns account to pool
+- [x] Issue lifecycle — success/failure comments on every job, issue closed on completion
+- [x] `modules/aws-account/` — `aws_organizations_account` resource
+- [x] `modules/cyberark-policy/` — three `idsec_policy_cloud_access` resources
+- [x] `use-cases/aws-account-vending/` — Create mode Terraform config
+- [x] `use-cases/cyberark-sca-policy/` — SCA policy Terraform config (idsec provider only)
 
 ## What's NOT Built Yet (Next Phases)
 
 ### Phase 2 — Baseline Security in Child Accounts
-- [ ] CloudTrail, GuardDuty, and account alias in newly created accounts
+- [ ] CloudTrail, GuardDuty, account alias in newly created accounts (Create mode only)
 - [ ] Requires a separate Terraform apply pass after account ID is known
-      (blocked by aws.child provider chicken-and-egg on first apply)
+      (blocked by aws.child provider chicken-and-egg problem on first apply)
 - [ ] New module: `modules/aws-baseline-security/`
 
-### Phase 3 — CyberArk Identity Access Provisioning (PRIMARY DEMO STORY)
-This is the core CyberArk narrative: policy as code, living in IaC alongside
-the infrastructure it governs. All access is defined in Terraform, version
-controlled, and enforced through CyberArk Identity.
-
-- [ ] Implement `modules/aws-iam-policies/` — three roles created in the
-      new account via the idsec Terraform provider:
-        - `RequesterPowerUser` — the engineer who opened the issue
-        - `AuditorReadOnly`    — auditors group (ReadOnly + SecurityAudit)
-        - `CloudOpsAdmin`      — cloud-ops team (AdministratorAccess)
-- [ ] Wire requester IAM ARN from GitHub issue opener (`github.event.issue.user.login`)
-- [ ] Auditor and CloudOps principal lists sourced from GitHub secrets
-- [ ] CyberArk idsec provider replaces or augments native IAM role assignments
-- [ ] CyberArk auth step re-enabled in workflow (currently commented out)
-- [ ] Auth endpoint: `POST {CYBERARK_TENANT_URL}/oauth2/platformtoken`
-
-### Phase 4 — Deprovisioning Workflow
-Full lifecycle: every resource created during provisioning can be torn down
-via a second GitHub issue, keeping the closed-loop pattern consistent.
-
-- [ ] New issue template: `.github/ISSUE_TEMPLATE/aws-account-deprovision.yml`
-      Fields: account name, account ID, reason for deprovisioning
-- [ ] New workflow: `.github/workflows/aws-account-deprovision.yml`
-      Triggered by label: `deprovision-aws-account`
-- [ ] Deprovisioning steps:
-        1. Authenticate to CyberArk Identity (same OAuth2 flow)
-        2. Remove all CyberArk role assignments from the account
-        3. Move account to a quarantine OU in AWS Organizations
-        4. Detach all IAM roles and policies from the account
-        5. Comment full deprovisioning summary on issue and close it
-- [ ] Note: AWS accounts cannot be deleted via API — quarantine OU approach
-      is the correct pattern. Manual account closure via AWS console remains
-      a separate out-of-band step if full deletion is required.
-- [ ] New module: `modules/aws-deprovision/`
-
 ### Phase 5 — Additional Use Cases (Future)
-- [ ] User onboarding — provision CyberArk Identity user + AWS role assignment
-      triggered by GitHub issue
+- [ ] User onboarding — provision CyberArk Identity user + SCA policy triggered by GitHub issue
 - [ ] Secrets rotation — trigger CyberArk secrets rotation via GitHub Actions
 - [ ] Cross-account access — grant an existing user access to a new account
-      without full reprovisioning
 
 ## Coding Conventions
 - All Terraform modules follow: `main.tf`, `variables.tf`, `outputs.tf`
@@ -163,15 +175,16 @@ via a second GitHub issue, keeping the closed-loop pattern consistent.
 - New reusable modules go in `modules/<module-name>/`
 - New workflows go in `.github/workflows/<use-case-name>.yml`
 - New issue forms go in `.github/ISSUE_TEMPLATE/<use-case-name>.yml`
-- Every workflow must: authenticate to CyberArk first, use `environment: production` gate,
-  comment success/failure back on the triggering issue
+- Every workflow must: use `environment: production` gate, comment success/failure on the issue
+- Dropdown option format: `"Display Name | id-value"` — ID parsed back with `awk -F' | ' '{print $NF}' | tr -d ' '`
 
 ## CyberArk Identity Context
 - Provider repo: https://github.com/cyberark/terraform-provider-idsec
 - Auth endpoint: `POST {CYBERARK_TENANT_URL}/oauth2/platformtoken`
 - Grant type: `client_credentials`
-- Token is short-lived, masked immediately in logs with `::add-mask::`
-- Token is passed to Terraform as `TF_VAR_cyberark_token` (sensitive)
+- SCA policy resource: `idsec_policy_cloud_access`
+- `role_id` in `aws_account_targets` = IAM Identity Center **permission set ARN**
+  (not an IAM role ARN — SCA federates through IAM Identity Center)
 
 ## Agent Instructions (Claude Code)
 
@@ -179,11 +192,6 @@ When working autonomously on this repo:
 
 1. Always read this file fully before making any changes
 2. Never commit directly to main — use feature branches
-3. After pushing, run `gh run watch` and wait for the workflow to complete
-4. If the workflow fails, read `gh run view --log-failed` and fix the issue
-5. Iterate until the workflow succeeds before declaring done
-6. Do not touch files outside the scope of the current task
-7. The `environment: production` gate in the workflow requires manual
-   approval — note this in your output and wait for it before reading results
-8. When done, summarize: what changed, what was tested, what the
-   workflow output showed
+3. Do not touch files outside the scope of the current task
+4. The `environment: production` gate requires manual approval — note this in output
+5. When done, summarize: what changed, what was tested, what the workflow output showed

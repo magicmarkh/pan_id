@@ -58,6 +58,8 @@ jobs:
     needs: parse-request
     runs-on: ubuntu-latest
     environment: production
+    outputs:
+      account_id: ${{ steps.consolidate_account_id.outputs.account_id }}
 
     steps:
       - name: Checkout repository
@@ -238,6 +240,27 @@ jobs:
           TF_VAR_target_ou_id: ${{ steps.parse_target_ou.outputs.ou_id }}
         run: terraform apply -auto-approve tfplan
 
+      - name: Get Terraform account ID (Create)
+        if: needs.parse-request.outputs.mode == 'Create'
+        id: tf_account_id
+        working-directory: ./use-cases/aws-account-vending
+        run: |
+          ACCOUNT_ID=$(terraform output -raw account_id 2>/dev/null || echo "")
+          echo "account_id=$ACCOUNT_ID" >> $GITHUB_OUTPUT
+
+      - name: Consolidate account ID for downstream jobs
+        id: consolidate_account_id
+        if: success()
+        run: |
+          MODE="${{ needs.parse-request.outputs.mode }}"
+          if [ "$MODE" = "Simulate" ]; then
+            ACCOUNT_ID="${{ steps.assign_account.outputs.account_id }}"
+          else
+            ACCOUNT_ID="${{ steps.tf_account_id.outputs.account_id }}"
+          fi
+          echo "account_id=$ACCOUNT_ID" >> $GITHUB_OUTPUT
+          echo "Resolved account ID: $ACCOUNT_ID"
+
       # ── Success / failure comments ────────────────────────────────────────────
 
       - name: Comment Success on Issue
@@ -280,20 +303,6 @@ jobs:
               body: output
             });
 
-      - name: Close Issue on Success
-        if: success()
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            github.rest.issues.update({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: 'closed',
-              labels: ['provision-aws-account', 'provisioned']
-            });
-
       - name: Comment Failure on Issue
         if: failure()
         uses: actions/github-script@v7
@@ -314,4 +323,96 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: output
+            });
+
+  apply-sca-policies:
+    needs: [parse-request, provision-account]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.14.9"
+
+      - name: Terraform Init (SCA Policies)
+        working-directory: ./use-cases/cyberark-sca-policy
+        run: terraform init
+
+      - name: Terraform Apply (SCA Policies)
+        id: sca_apply
+        working-directory: ./use-cases/cyberark-sca-policy
+        env:
+          TF_VAR_cyberark_tenant_url: ${{ secrets.CYBERARK_TENANT_URL }}
+          TF_VAR_cyberark_client_id: ${{ secrets.CYBERARK_CLIENT_ID }}
+          TF_VAR_cyberark_client_secret: ${{ secrets.CYBERARK_CLIENT_SECRET }}
+          TF_VAR_account_id: ${{ needs.provision-account.outputs.account_id }}
+          TF_VAR_account_name: ${{ needs.parse-request.outputs.account_name }}
+          TF_VAR_requester_username: ${{ needs.parse-request.outputs.requester }}
+          TF_VAR_power_user_permission_set_arn: ${{ secrets.SCA_POWER_USER_PERMISSION_SET_ARN }}
+          TF_VAR_audit_permission_set_arn: ${{ secrets.SCA_AUDIT_PERMISSION_SET_ARN }}
+          TF_VAR_cloudops_permission_set_arn: ${{ secrets.SCA_CLOUDOPS_PERMISSION_SET_ARN }}
+          TF_VAR_audit_group_name: ${{ secrets.SCA_AUDIT_GROUP_NAME }}
+          TF_VAR_cloudops_group_name: ${{ secrets.SCA_CLOUDOPS_GROUP_NAME }}
+        run: terraform apply -auto-approve -no-color
+
+      - name: Upload SCA Terraform state
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sca-tfstate-${{ needs.provision-account.outputs.account_id }}
+          path: ./use-cases/cyberark-sca-policy/terraform.tfstate
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Close issue and comment SCA success
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `### 🔐 CyberArk SCA Policies Applied
+
+              Access policies have been created in CyberArk Identity for account \`${{ needs.provision-account.outputs.account_id }}\`:
+
+              | Policy | Principals |
+              |---|---|
+              | **PowerUser** | @${{ needs.parse-request.outputs.requester }} |
+              | **Audit** | ${{ secrets.SCA_AUDIT_GROUP_NAME }} (group) |
+              | **CloudOps** | ${{ secrets.SCA_CLOUDOPS_GROUP_NAME }} (group) |
+
+              Access is available via CyberArk Secure Cloud Access. Sessions limited to 1 hour, Mon–Fri 08:00–18:00 UTC.`
+            });
+
+            await github.rest.issues.update({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'closed',
+              labels: ['provision-aws-account', 'provisioned']
+            });
+
+      - name: Comment SCA failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `### ⚠️ CyberArk SCA Policy Creation Failed
+
+              Account provisioning succeeded, but CyberArk Secure Cloud Access policies could not be applied.
+              Access to the account will not be available via CyberArk until this is resolved.
+
+              [View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`
             });
