@@ -51,9 +51,10 @@ GitHub Issue Form (multi-select) → GitHub Actions → [production gate]
 ### 4. Refresh Issue Templates (`.github/workflows/refresh-issue-templates.yml`)
 - **Triggers:** daily at 06:00 UTC, `workflow_dispatch`, or `workflow_run` after vending/deprovisioning completes
 - Queries AWS Organizations and rewrites the YAML dropdown options:
-  - Pool OU accounts tagged `Status=Available` → provision form
-  - All org accounts EXCEPT management account and `AWS_UNUSED_OU_ID` accounts → deprovision form
+  - **Pool OU** accounts tagged `Status=Available` → provision form (`pool_account`)
+  - **Active OU** accounts → deprovision form (`active_account`)
   - Direct child OUs of org root → provision form `target_ou`
+- **Two-OU model:** the deprovision dropdown only lists accounts in `AWS_ACTIVE_OU_ID`. Accounts in other OUs (other demo environments) are intentionally invisible and cannot be deprovisioned through this pipeline.
 - Vending and deprovision workflows also call `createWorkflowDispatch` on success for immediate refresh
 
 ## Key Design Decisions (Already Made — Do Not Revisit Unless Asked)
@@ -63,7 +64,7 @@ GitHub Issue Form (multi-select) → GitHub Actions → [production gate]
 - **Issue parsing:** `stefanbuck/github-issue-parser@v3` maps issue form fields to job outputs
 - **Dropdown freshness:** `refresh-issue-templates.yml` queries AWS and rewrites YAML; option format is `"Name | ID"` so workflows can parse the ID back with `awk -F' [|] '`
 - **Multi-account deprovision parsing:** comma-separated multi-select string → JSON array `[{id, name}, ...]` consumed by `strategy.matrix`
-- **OU return on deprovision:** dynamic via `aws organizations list-parents` (works regardless of which OU the account currently sits in); skipped if account is already in pool OU
+- **OU return on deprovision:** uses `aws organizations list-parents` to confirm current parent, then moves only if the account is in the active OU. Skipped if already in pool. Fails if account is in any other OU (defends adjacent demo environments).
 - **SCA policy state:** GitHub Actions artifact (not S3) — sufficient for demo lifecycle (90-day retention)
 - **Terraform state for account vending:** Local (S3 backend stubbed and commented in `main.tf`)
 - **idsec provider version:** `cyberark/idsec >= 0.1.0` (only 0.x releases exist — DO NOT use `~> 1.0`)
@@ -99,10 +100,9 @@ pan_id/
 | `CYBERARK_SUBDOMAIN` | Tenant subdomain only e.g. `abc1234` (used by idsec Terraform provider) |
 | `CYBERARK_CLIENT_ID` | OAuth2 service account client ID (`service_user` in idsec provider) |
 | `CYBERARK_CLIENT_SECRET` | OAuth2 service account client secret (`service_token` in idsec provider) |
-| `AWS_MANAGEMENT_ACCOUNT_ID` | 12-digit management account ID (used to construct IAM role ARNs and to exclude from deprovision dropdown) |
-| `AWS_POOL_OU_ID` | OU ID containing pre-staged lab accounts |
-| `AWS_ACTIVE_OU_ID` | OU ID where assigned/active accounts live |
-| `AWS_UNUSED_OU_ID` | OU ID for unprovisioned/unconfigured accounts (excluded from deprovision dropdown) |
+| `AWS_MANAGEMENT_ACCOUNT_ID` | 12-digit management account ID (used to construct the GitHubActionsOrgProvisioner IAM role ARN) |
+| `AWS_POOL_OU_ID` | OU ID containing pre-staged lab accounts (provision dropdown source) |
+| `AWS_ACTIVE_OU_ID` | OU ID where assigned/active accounts live (deprovision dropdown source) |
 | `SCA_POWER_USER_PERMISSION_SET_ARN` | IAM Identity Center permission set ARN for power user access |
 | `SCA_AUDIT_PERMISSION_SET_ARN` | IAM Identity Center permission set ARN for audit read-only |
 | `SCA_CLOUDOPS_PERMISSION_SET_ARN` | IAM Identity Center permission set ARN for cloud ops admin |

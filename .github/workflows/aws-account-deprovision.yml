@@ -151,6 +151,7 @@ jobs:
         run: |
           ACCOUNT_ID="${{ matrix.account.id }}"
           POOL_OU_ID="${{ secrets.AWS_POOL_OU_ID }}"
+          ACTIVE_OU_ID="${{ secrets.AWS_ACTIVE_OU_ID }}"
 
           CURRENT_PARENT=$(aws organizations list-parents \
             --child-id "$ACCOUNT_ID" \
@@ -159,14 +160,20 @@ jobs:
 
           echo "Current parent: $CURRENT_PARENT"
 
+          # Two-OU safety guard: only move accounts that are currently in the active OU
+          # or already in the pool OU. Refuse to touch accounts in other demo OUs.
           if [ "$CURRENT_PARENT" = "$POOL_OU_ID" ]; then
             echo "⚠️ Account is already in pool OU — skipping move"
-          else
+          elif [ "$CURRENT_PARENT" = "$ACTIVE_OU_ID" ]; then
             aws organizations move-account \
               --account-id "$ACCOUNT_ID" \
-              --source-parent-id "$CURRENT_PARENT" \
+              --source-parent-id "$ACTIVE_OU_ID" \
               --destination-parent-id "$POOL_OU_ID"
             echo "✅ Moved account back to pool OU"
+          else
+            echo "❌ Account $ACCOUNT_ID is in OU $CURRENT_PARENT (not the active OU)."
+            echo "   Refusing to move — this account belongs to another demo environment."
+            exit 1
           fi
 
           aws organizations untag-resource \
