@@ -24,8 +24,6 @@ body:
 
       '
     options:
-    - sandbox 2 | 841162681454
-    - test-3 | 422546939722
     - sandbox 3 | 588738594421
   validations:
     required: true
