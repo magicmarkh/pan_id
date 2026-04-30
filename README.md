@@ -110,7 +110,7 @@ This system provides a self-service AWS account vending machine that:
 ### Prerequisites
 
 1. **GitHub Repository Secrets**: Configure the following secrets in your repository settings:
-   - `CYBERARK_TENANT_URL`: Your CyberArk Identity tenant URL (e.g., `https://your-tenant.cyberark.cloud`)
+   - `CYBERARK_SUBDOMAIN`: Tenant subdomain only (e.g. `abc1234`, not the full URL)
    - `CYBERARK_CLIENT_ID`: OAuth2 client ID for CyberArk Identity
    - `CYBERARK_CLIENT_SECRET`: OAuth2 client secret for CyberArk Identity
 

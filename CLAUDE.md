@@ -96,7 +96,6 @@ pan_id/
 ## GitHub Secrets Required
 | Secret | Description |
 |---|---|
-| `CYBERARK_TENANT_URL` | CyberArk tenant URL e.g. `https://abc1234.id.cyberark.cloud` (used by legacy curl steps; SCA uses `CYBERARK_SUBDOMAIN`) |
 | `CYBERARK_SUBDOMAIN` | Tenant subdomain only e.g. `abc1234` (used by idsec Terraform provider) |
 | `CYBERARK_CLIENT_ID` | OAuth2 service account client ID (`service_user` in idsec provider) |
 | `CYBERARK_CLIENT_SECRET` | OAuth2 service account client secret (`service_token` in idsec provider) |
