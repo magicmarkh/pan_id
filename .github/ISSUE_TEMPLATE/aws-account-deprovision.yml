@@ -1,43 +1,45 @@
 name: AWS Account Deprovision Request
 description: Return a lab account to the pool or deprovision a real account
-title: "[Deprovision]: "
-labels: ["deprovision-aws-account"]
+title: '[Deprovision]: '
+labels:
+- deprovision-aws-account
 body:
-  - type: markdown
-    attributes:
-      value: |
-        ## AWS Account Deprovisioning Request
+- type: markdown
+  attributes:
+    value: '## AWS Account Deprovisioning Request
 
-        **Before submitting:** run the [Refresh Issue Templates](../../actions/workflows/refresh-issue-templates.yml)
-        workflow so the dropdown below reflects currently active accounts.
 
-  - type: dropdown
-    id: active_account
-    attributes:
-      label: Account to Deprovision
-      description: >
-        Select the active lab account to return to the pool.
-        Run the "Refresh Issue Templates" workflow to populate with currently assigned accounts.
-      options:
-        - Run 'Refresh Issue Templates' workflow to populate this list
-    validations:
-      required: true
+      **Before submitting:** run the [Refresh Issue Templates](https://github.com/magicmarkh/pan_id/actions/workflows/refresh-issue-templates.yml)
 
-  - type: dropdown
-    id: mode
-    attributes:
-      label: Provisioning Mode Used
-      description: Select the mode that was used when this account was provisioned
-      options:
-        - Simulate
-        - Create
-    validations:
-      required: true
+      workflow so the dropdown below reflects currently active accounts.
 
-  - type: textarea
-    id: reason
-    attributes:
-      label: Reason for Deprovisioning
-      placeholder: "Demo complete, returning to pool"
-    validations:
-      required: true
+      '
+- type: dropdown
+  id: active_account
+  attributes:
+    label: Account to Deprovision
+    description: 'Select the active lab account to return to the pool. Run the "Refresh
+      Issue Templates" workflow to populate with currently assigned accounts.
+
+      '
+    options:
+    - jde-idc-dev | 128327517575
+  validations:
+    required: true
+- type: dropdown
+  id: mode
+  attributes:
+    label: Provisioning Mode Used
+    description: Select the mode that was used when this account was provisioned
+    options:
+    - Simulate
+    - Create
+  validations:
+    required: true
+- type: textarea
+  id: reason
+  attributes:
+    label: Reason for Deprovisioning
+    placeholder: Demo complete, returning to pool
+  validations:
+    required: true

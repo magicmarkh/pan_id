@@ -1,84 +1,95 @@
 name: AWS Account Request
 description: Request a new AWS account to be provisioned
-title: "[AWS Account Request]: "
-labels: ["aws-account-request"]
+title: '[AWS Account Request]: '
+labels:
+- aws-account-request
 body:
-  - type: markdown
-    attributes:
-      value: |
-        ## AWS Account Provisioning Request
+- type: markdown
+  attributes:
+    value: '## AWS Account Provisioning Request
 
-        **Before submitting:** run the [Refresh Issue Templates](../../actions/workflows/refresh-issue-templates.yml)
-        workflow so the dropdowns below reflect current AWS state.
 
-  - type: dropdown
-    id: mode
-    attributes:
-      label: Provisioning Mode
-      description: >
-        Simulate uses a pre-staged lab account (faster, recommended for demos).
-        Create provisions a real new AWS account (slower, uses org account quota).
-      options:
-        - Simulate
-        - Create
-    validations:
-      required: true
+      **Before submitting:** run the [Refresh Issue Templates](https://github.com/magicmarkh/pan_id/actions/workflows/refresh-issue-templates.yml)
 
-  - type: dropdown
-    id: pool_account
-    attributes:
-      label: Available Lab Account (Simulate mode only)
-      description: >
-        Select a pool account to assign. Only used when Provisioning Mode = Simulate.
-        Run the "Refresh Issue Templates" workflow to populate with current available accounts.
-      options:
-        - Run 'Refresh Issue Templates' workflow to populate this list
-    validations:
-      required: false
+      workflow so the dropdowns below reflect current AWS state.
 
-  - type: input
-    id: account_name
-    attributes:
-      label: Account Name / Label
-      description: >
-        A label for this account assignment (Simulate) or the actual AWS account name (Create).
-        Alphanumeric and hyphens only.
-      placeholder: "my-application-prod"
-    validations:
-      required: true
+      '
+- type: dropdown
+  id: mode
+  attributes:
+    label: Provisioning Mode
+    description: 'Simulate uses a pre-staged lab account (faster, recommended for
+      demos). Create provisions a real new AWS account (slower, uses org account quota).
 
-  - type: dropdown
-    id: target_ou
-    attributes:
-      label: Target Organizational Unit (Create mode only)
-      description: >
-        OU where the new account will be placed. Only used when Provisioning Mode = Create.
-        Run the "Refresh Issue Templates" workflow to populate with current OUs.
-      options:
-        - Run 'Refresh Issue Templates' workflow to populate this list
-    validations:
-      required: false
+      '
+    options:
+    - Simulate
+    - Create
+  validations:
+    required: true
+- type: dropdown
+  id: pool_account
+  attributes:
+    label: Available Lab Account (Simulate mode only)
+    description: 'Select a pool account to assign. Only used when Provisioning Mode
+      = Simulate. Run the "Refresh Issue Templates" workflow to populate with current
+      available accounts.
 
-  - type: dropdown
-    id: environment
-    attributes:
-      label: Environment
-      description: Select the environment type for this account
-      options:
-        - dev
-        - staging
-        - prod
-    validations:
-      required: true
+      '
+    options:
+    - test-2 | 210806259509
+    - test-3 | 422546939722
+    - test-1 | 900360460826
+  validations:
+    required: false
+- type: input
+  id: account_name
+  attributes:
+    label: Account Name / Label
+    description: 'A label for this account assignment (Simulate) or the actual AWS
+      account name (Create). Alphanumeric and hyphens only.
 
-  - type: dropdown
-    id: owner_team
-    attributes:
-      label: Owner Team
-      description: Team or group responsible for this account
-      options:
-        - platform-engineering
-        - app-dev
-        - security-ops
-    validations:
-      required: true
+      '
+    placeholder: my-application-prod
+  validations:
+    required: true
+- type: dropdown
+  id: target_ou
+  attributes:
+    label: Target Organizational Unit (Create mode only)
+    description: 'OU where the new account will be placed. Only used when Provisioning
+      Mode = Create. Run the "Refresh Issue Templates" workflow to populate with current
+      OUs.
+
+      '
+    options:
+    - Production | ou-lq9x-50uk5d5c
+    - Sandbox | ou-lq9x-5svgxsqy
+    - Unused | ou-lq9x-6aumntl4
+    - Management | ou-lq9x-7wimdqgx
+    - Delegated Admin | ou-lq9x-99xs8wky
+    - Dev | ou-lq9x-f4uh5zcs
+  validations:
+    required: false
+- type: dropdown
+  id: environment
+  attributes:
+    label: Environment
+    description: Select the environment type for this account
+    options:
+    - dev
+    - staging
+    - prod
+  validations:
+    required: true
+- type: dropdown
+  id: owner_team
+  attributes:
+    label: Owner Team
+    description: Team or group responsible for this account
+    options:
+    - platform-engineering
+    - app-dev
+    - security-ops
+  validations:
+    required: true

@@ -62,7 +62,7 @@ jobs:
                 --query 'Account.Name' \
                 --output text)
               ENTRY=$(printf '{"id":"%s","name":"%s"}' "$ACCOUNT_ID" "$NAME")
-              AVAILABLE_JSON=$(echo "$AVAILABLE_JSON" | jq --argjson e "$ENTRY" '. + [$e]')
+              AVAILABLE_JSON=$(echo "$AVAILABLE_JSON" | jq -c --argjson e "$ENTRY" '. + [$e]')
             fi
           done
 
@@ -86,7 +86,7 @@ jobs:
               --query 'Account.Name' \
               --output text)
             ENTRY=$(printf '{"id":"%s","name":"%s"}' "$ACCOUNT_ID" "$NAME")
-            ACTIVE_JSON=$(echo "$ACTIVE_JSON" | jq --argjson e "$ENTRY" '. + [$e]')
+            ACTIVE_JSON=$(echo "$ACTIVE_JSON" | jq -c --argjson e "$ENTRY" '. + [$e]')
           done
 
           echo "active_accounts=$ACTIVE_JSON" >> $GITHUB_OUTPUT
@@ -113,7 +113,7 @@ jobs:
               --query 'OrganizationalUnit.Name' \
               --output text)
             ENTRY=$(printf '{"id":"%s","name":"%s"}' "$OU_ID" "$OU_NAME")
-            OU_JSON=$(echo "$OU_JSON" | jq --argjson e "$ENTRY" '. + [$e]')
+            OU_JSON=$(echo "$OU_JSON" | jq -c --argjson e "$ENTRY" '. + [$e]')
           done
 
           echo "target_ous=$OU_JSON" >> $GITHUB_OUTPUT
@@ -134,14 +134,13 @@ jobs:
           import yaml
           import json
           import os
-          import sys
 
           available_accounts = json.loads(os.environ["AVAILABLE_ACCOUNTS"])
           active_accounts    = json.loads(os.environ["ACTIVE_ACCOUNTS"])
           target_ous         = json.loads(os.environ["TARGET_OUS"])
           dry_run            = os.environ["DRY_RUN"] == "true"
 
-          # Option formats — ID embedded so the workflow can parse it back out
+          # Option format: "Name | ID" — ID is parsed back out by the workflow
           pool_options = (
               [f"{a['name']} | {a['id']}" for a in available_accounts]
               or ["No available accounts — check pool OU tags (Status=Available)"]
@@ -168,23 +167,15 @@ jobs:
               else:
                   with open(path, "w") as f:
                       yaml.dump(template, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
-              return template
 
           update_template(
               ".github/ISSUE_TEMPLATE/aws-account-request.yml",
-              {
-                  "pool_account": pool_options,
-                  "target_ou":    ou_options,
-              },
+              {"pool_account": pool_options, "target_ou": ou_options},
           )
-
           update_template(
               ".github/ISSUE_TEMPLATE/aws-account-deprovision.yml",
-              {
-                  "active_account": active_options,
-              },
+              {"active_account": active_options},
           )
-
           print("Done.")
           EOF
 
@@ -200,11 +191,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .github/ISSUE_TEMPLATE/aws-account-request.yml
           git add .github/ISSUE_TEMPLATE/aws-account-deprovision.yml
-          git commit -m "chore: refresh issue template dropdowns with current AWS state
-
-          Pool accounts (available): ${{ steps.pool_accounts.outputs.available_accounts }}
-          Active accounts (InUse): ${{ steps.active_accounts.outputs.active_accounts }}
-          Target OUs: ${{ steps.target_ous.outputs.target_ous }}"
+          git commit -m "chore: refresh issue template dropdowns with current AWS state"
           git push origin HEAD
 
       - name: No changes detected
