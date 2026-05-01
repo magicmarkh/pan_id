@@ -361,23 +361,7 @@ jobs:
           TF_VAR_cloudops_role_name: ${{ secrets.CYBERARK_CLOUDOPS_ROLE }}
           TF_LOG: DEBUG
           TF_LOG_PATH: /tmp/tf-debug.log
-        run: |
-          # SCA backend is flaky when creating multiple policies for the same
-          # workspace. The module already paces creates with time_sleep, but a
-          # transient 1101 on the very first request can still fail the apply.
-          # Retry once after a 90s pause; terraform re-attempts only the
-          # failed/tainted resources.
-          attempt=1
-          max_attempts=2
-          until terraform apply -auto-approve -no-color -parallelism=1; do
-            if [ "$attempt" -ge "$max_attempts" ]; then
-              echo "❌ terraform apply failed after $attempt attempts"
-              exit 1
-            fi
-            echo "⚠️ terraform apply failed (attempt $attempt) — sleeping 90s before retry"
-            sleep 90
-            attempt=$((attempt + 1))
-          done
+        run: terraform apply -auto-approve -no-color
 
       - name: Surface SCA API error response (debug)
         if: failure()
