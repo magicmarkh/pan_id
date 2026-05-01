@@ -1,5 +1,3 @@
-# AWS Account Provisioning Variables
-
 variable "account_name" {
   description = "Name of the AWS account to be created"
   type        = string
@@ -20,43 +18,10 @@ variable "account_email" {
   }
 }
 
-variable "environment" {
-  description = "Environment type for the account"
-  type        = string
-
-  validation {
-    condition     = contains(["dev", "staging", "prod"], var.environment)
-    error_message = "Environment must be one of: dev, staging, prod."
-  }
-}
-
-variable "owner_team" {
-  description = "Team or group responsible for this account"
-  type        = string
-}
-
 variable "organizational_unit_id" {
   description = "AWS Organizations OU ID where the account should be placed"
   type        = string
   default     = ""
-}
-
-variable "enable_cloudtrail" {
-  description = "Enable AWS CloudTrail in the new account (reserved for future phase)"
-  type        = bool
-  default     = false
-}
-
-variable "enable_config" {
-  description = "Enable AWS Config in the new account"
-  type        = bool
-  default     = true
-}
-
-variable "enable_guardduty" {
-  description = "Enable Amazon GuardDuty in the new account (reserved for future phase)"
-  type        = bool
-  default     = false
 }
 
 variable "tags" {

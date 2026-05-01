@@ -6,6 +6,20 @@ terraform {
       source  = "cyberark/idsec"
       version = ">= 0.1.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.6"
+    }
+  }
+}
+
+resource "random_string" "policy_suffix" {
+  length  = 6
+  upper   = false
+  special = false
+
+  keepers = {
+    account_id = var.account_id
   }
 }
 
@@ -15,18 +29,11 @@ locals {
     from_hour        = var.access_window_from_hour
     to_hour          = var.access_window_to_hour
   }
-
-  # Strip wrapping single/double quotes and whitespace from role names —
-  # SCA matches principals by exact string, so `'ML-Cloud-Ops'` (literal
-  # quotes from a sloppily-stored secret) silently fails to resolve.
-  power_user_role_name = trim(trimspace(var.power_user_role_name), "'\"")
-  audit_role_name      = trim(trimspace(var.audit_role_name), "'\"")
-  cloudops_role_name   = trim(trimspace(var.cloudops_role_name), "'\"")
 }
 
 resource "idsec_policy_cloud_access" "power_user" {
   metadata = {
-    name        = "aws-${var.account_name}-poweruser-1"
+    name        = "aws-${var.account_name}-poweruser-${random_string.policy_suffix.result}"
     description = "PowerUser-access-${var.account_name}-${var.account_id}"
     status = {
       status = "Active"
@@ -40,7 +47,7 @@ resource "idsec_policy_cloud_access" "power_user" {
 
   principals = [
     {
-      name = local.power_user_role_name
+      name = var.power_user_role_name
       type = "ROLE"
     }
   ]
@@ -63,7 +70,7 @@ resource "idsec_policy_cloud_access" "power_user" {
 
 resource "idsec_policy_cloud_access" "audit" {
   metadata = {
-    name        = "aws-${var.account_name}-audit"
+    name        = "aws-${var.account_name}-audit-${random_string.policy_suffix.result}"
     description = "Audit-readonly-access-${var.account_name}-${var.account_id}"
     status = {
       status = "Active"
@@ -77,7 +84,7 @@ resource "idsec_policy_cloud_access" "audit" {
 
   principals = [
     {
-      name = local.audit_role_name
+      name = var.audit_role_name
       type = "ROLE"
     }
   ]
@@ -100,7 +107,7 @@ resource "idsec_policy_cloud_access" "audit" {
 
 resource "idsec_policy_cloud_access" "cloudops" {
   metadata = {
-    name        = "aws-${var.account_name}-cloudops-1"
+    name        = "aws-${var.account_name}-cloudops-${random_string.policy_suffix.result}"
     description = "CloudOps-admin-access-${var.account_name}-${var.account_id}"
     status = {
       status = "Active"
@@ -114,7 +121,7 @@ resource "idsec_policy_cloud_access" "cloudops" {
 
   principals = [
     {
-      name = local.cloudops_role_name
+      name = var.cloudops_role_name
       type = "ROLE"
     }
   ]
