@@ -6,6 +6,10 @@ terraform {
       source  = "cyberark/idsec"
       version = ">= 0.1.0"
     }
+    time = {
+      source  = "hashicorp/time"
+      version = ">= 0.9.0"
+    }
   }
 }
 
@@ -54,7 +58,14 @@ resource "idsec_policy_cloud_access" "power_user" {
   }
 }
 
+resource "time_sleep" "after_power_user" {
+  depends_on      = [idsec_policy_cloud_access.power_user]
+  create_duration = var.policy_create_delay
+}
+
 resource "idsec_policy_cloud_access" "audit" {
+  depends_on = [time_sleep.after_power_user]
+
   metadata = {
     name        = "aws-${var.account_name}-audit"
     description = "Audit-readonly-access-${var.account_name}-${var.account_id}"
@@ -91,7 +102,14 @@ resource "idsec_policy_cloud_access" "audit" {
   }
 }
 
+resource "time_sleep" "after_audit" {
+  depends_on      = [idsec_policy_cloud_access.audit]
+  create_duration = var.policy_create_delay
+}
+
 resource "idsec_policy_cloud_access" "cloudops" {
+  depends_on = [time_sleep.after_audit]
+
   metadata = {
     name        = "aws-${var.account_name}-cloudops"
     description = "CloudOps-admin-access-${var.account_name}-${var.account_id}"
