@@ -52,7 +52,7 @@ variable "max_session_duration" {
 variable "time_zone" {
   description = "IANA timezone name (e.g. America/New_York, Etc/UTC)"
   type        = string
-  default     = "Etc/UTC"
+  default     = "America/New_York"
 }
 
 variable "access_window_from_hour" {
