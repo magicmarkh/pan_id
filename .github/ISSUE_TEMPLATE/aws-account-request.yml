@@ -37,7 +37,6 @@ body:
       '
     options:
     - test-3 | 422546939722
-    - sandbox 3 | 588738594421
   validations:
     required: false
 - type: input
