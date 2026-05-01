@@ -15,6 +15,13 @@ locals {
     from_hour        = var.access_window_from_hour
     to_hour          = var.access_window_to_hour
   }
+
+  # Strip wrapping single/double quotes and whitespace from role names —
+  # SCA matches principals by exact string, so `'ML-Cloud-Ops'` (literal
+  # quotes from a sloppily-stored secret) silently fails to resolve.
+  power_user_role_name = trim(trimspace(var.power_user_role_name), "'\"")
+  audit_role_name      = trim(trimspace(var.audit_role_name), "'\"")
+  cloudops_role_name   = trim(trimspace(var.cloudops_role_name), "'\"")
 }
 
 resource "idsec_policy_cloud_access" "power_user" {
@@ -33,7 +40,7 @@ resource "idsec_policy_cloud_access" "power_user" {
 
   principals = [
     {
-      name = var.power_user_role_name
+      name = local.power_user_role_name
       type = "ROLE"
     }
   ]
@@ -70,7 +77,7 @@ resource "idsec_policy_cloud_access" "audit" {
 
   principals = [
     {
-      name = var.audit_role_name
+      name = local.audit_role_name
       type = "ROLE"
     }
   ]
@@ -107,7 +114,7 @@ resource "idsec_policy_cloud_access" "cloudops" {
 
   principals = [
     {
-      name = var.cloudops_role_name
+      name = local.cloudops_role_name
       type = "ROLE"
     }
   ]
