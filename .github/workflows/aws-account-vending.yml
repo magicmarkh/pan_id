@@ -343,6 +343,33 @@ jobs:
               exit 1 ;;
           esac
 
+      - name: Inspect secret hygiene (no values printed)
+        env:
+          SUBDOMAIN: ${{ secrets.CYBERARK_SUBDOMAIN }}
+          POWERUSER_ROLE: ${{ secrets.CYBERARK_POWERUSER_ROLE }}
+          AUDITOR_ROLE: ${{ secrets.CYBERARK_AUDITOR_ROLE }}
+          CLOUDOPS_ROLE: ${{ secrets.CYBERARK_CLOUDOPS_ROLE }}
+          CLIENT_ID: ${{ secrets.CYBERARK_CLIENT_ID }}
+        run: |
+          inspect() {
+            local name="$1"
+            local val="$2"
+            local len=${#val}
+            local first="${val:0:1}"
+            local last="${val: -1}"
+            local has_ws="no"
+            case "$val" in *" "*|*$'\t'*|*$'\n'*|*$'\r'*) has_ws="YES" ;; esac
+            local lead_q="no"; case "$first" in "'"|'"') lead_q="YES" ;; esac
+            local trail_q="no"; case "$last" in "'"|'"') trail_q="YES" ;; esac
+            printf "%-28s len=%-3s leading_quote=%-3s trailing_quote=%-3s whitespace=%s\n" \
+              "$name" "$len" "$lead_q" "$trail_q" "$has_ws"
+          }
+          inspect CYBERARK_SUBDOMAIN        "$SUBDOMAIN"
+          inspect CYBERARK_CLIENT_ID        "$CLIENT_ID"
+          inspect CYBERARK_POWERUSER_ROLE   "$POWERUSER_ROLE"
+          inspect CYBERARK_AUDITOR_ROLE     "$AUDITOR_ROLE"
+          inspect CYBERARK_CLOUDOPS_ROLE    "$CLOUDOPS_ROLE"
+
       - name: Terraform Apply (SCA Policies)
         id: sca_apply
         working-directory: ./use-cases/cyberark-sca-policy
