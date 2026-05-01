@@ -8,6 +8,7 @@ permissions:
   issues: write
   contents: read
   id-token: write # Required for OIDC authentication with AWS
+  actions: write # Required to dispatch the Refresh Issue Templates workflow
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -403,6 +404,7 @@ jobs:
 
       - name: Trigger Refresh Issue Templates
         if: success()
+        continue-on-error: true
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}

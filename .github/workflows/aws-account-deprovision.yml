@@ -242,6 +242,7 @@ jobs:
 
       - name: Trigger Refresh Issue Templates
         if: needs.deprovision-account.result == 'success'
+        continue-on-error: true
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
