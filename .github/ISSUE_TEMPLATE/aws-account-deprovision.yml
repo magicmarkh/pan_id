@@ -27,6 +27,7 @@ body:
     - sandbox 2 | 841162681454
     - test-3 | 422546939722
     - test-2 | 210806259509
+    - sandbox 3 | 588738594421
   validations:
     required: true
 - type: dropdown
