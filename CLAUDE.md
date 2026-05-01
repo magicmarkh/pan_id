@@ -85,9 +85,7 @@ pan_id/
 │       └── refresh-issue-templates.yml   # Dropdown refresh (daily, dispatch, workflow_run)
 ├── modules/
 │   ├── cyberark-policy/    # idsec_policy_cloud_access × 3 (poweruser, audit, cloudops)
-│   ├── aws-account/        # aws_organizations_account resource
-│   ├── cyberark-auth/      # Stub — kept for reference; auth now via idsec provider directly
-│   └── aws-iam-policies/   # Stub — access via SCA permission sets, not IAM roles
+│   └── aws-account/        # aws_organizations_account resource
 ├── use-cases/
 │   ├── aws-account-vending/     # Create mode: Terraform for real AWS account creation
 │   └── cyberark-sca-policy/     # SCA policies: idsec provider only, no AWS
