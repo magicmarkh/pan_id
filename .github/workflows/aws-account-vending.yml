@@ -343,33 +343,6 @@ jobs:
               exit 1 ;;
           esac
 
-      - name: Inspect secret hygiene (no values printed)
-        env:
-          SUBDOMAIN: ${{ secrets.CYBERARK_SUBDOMAIN }}
-          POWERUSER_ROLE: ${{ secrets.CYBERARK_POWERUSER_ROLE }}
-          AUDITOR_ROLE: ${{ secrets.CYBERARK_AUDITOR_ROLE }}
-          CLOUDOPS_ROLE: ${{ secrets.CYBERARK_CLOUDOPS_ROLE }}
-          CLIENT_ID: ${{ secrets.CYBERARK_CLIENT_ID }}
-        run: |
-          inspect() {
-            local name="$1"
-            local val="$2"
-            local len=${#val}
-            local first="${val:0:1}"
-            local last="${val: -1}"
-            local has_ws="no"
-            case "$val" in *" "*|*$'\t'*|*$'\n'*|*$'\r'*) has_ws="YES" ;; esac
-            local lead_q="no"; case "$first" in "'"|'"') lead_q="YES" ;; esac
-            local trail_q="no"; case "$last" in "'"|'"') trail_q="YES" ;; esac
-            printf "%-28s len=%-3s leading_quote=%-3s trailing_quote=%-3s whitespace=%s\n" \
-              "$name" "$len" "$lead_q" "$trail_q" "$has_ws"
-          }
-          inspect CYBERARK_SUBDOMAIN        "$SUBDOMAIN"
-          inspect CYBERARK_CLIENT_ID        "$CLIENT_ID"
-          inspect CYBERARK_POWERUSER_ROLE   "$POWERUSER_ROLE"
-          inspect CYBERARK_AUDITOR_ROLE     "$AUDITOR_ROLE"
-          inspect CYBERARK_CLOUDOPS_ROLE    "$CLOUDOPS_ROLE"
-
       - name: Terraform Apply (SCA Policies)
         id: sca_apply
         working-directory: ./use-cases/cyberark-sca-policy
@@ -386,25 +359,7 @@ jobs:
           TF_VAR_cloudops_permission_set_arn: ${{ secrets.SCA_CLOUDOPS_PERMISSION_SET_ARN }}
           TF_VAR_audit_role_name: ${{ secrets.CYBERARK_AUDITOR_ROLE }}
           TF_VAR_cloudops_role_name: ${{ secrets.CYBERARK_CLOUDOPS_ROLE }}
-          TF_LOG: DEBUG
-          TF_LOG_PATH: /tmp/tf-debug.log
         run: terraform apply -auto-approve -no-color
-
-      - name: Surface SCA API error response (debug)
-        if: failure()
-        run: |
-          if [ ! -s /tmp/tf-debug.log ]; then
-            echo "No debug log captured."
-            exit 0
-          fi
-          echo "===== request bodies sent ====="
-          grep -n -B 1 -A 50 -E '"(metadata|principals|targets|conditions)"' /tmp/tf-debug.log | head -300 || echo "(no matches)"
-          echo
-          echo "===== HTTP responses with 4xx/5xx ====="
-          grep -n -B 5 -A 60 -E 'HTTP/[12]\.[01] [45][0-9]{2}|"code":[ ]?[45][0-9]{2}|"faultCode":[ ]?[45][0-9]{2}' /tmp/tf-debug.log | head -500 || echo "(no matches)"
-          echo
-          echo "===== last 200 lines ====="
-          tail -200 /tmp/tf-debug.log
 
       - name: Upload SCA Terraform state
         if: success()
