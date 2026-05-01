@@ -343,13 +343,23 @@ jobs:
               exit 1 ;;
           esac
 
+      - name: Fetch CyberArk OAuth credentials from Conjur Cloud
+        id: cyberark_creds
+        uses: ./.github/actions/fetch-cyberark-creds
+        with:
+          conjur-subdomain: ${{ secrets.CONJUR_SUBDOMAIN }}
+          conjur-host-id: ${{ vars.CONJUR_HOST_ID }}
+          authn-jwt-service-id: ${{ vars.CONJUR_AUTHN_JWT_SERVICE_ID }}
+          client-id-variable: ${{ vars.CONJUR_CLIENT_ID_VARIABLE }}
+          client-secret-variable: ${{ vars.CONJUR_CLIENT_SECRET_VARIABLE }}
+
       - name: Terraform Apply (SCA Policies)
         id: sca_apply
         working-directory: ./use-cases/cyberark-sca-policy
         env:
           TF_VAR_cyberark_subdomain: ${{ secrets.CYBERARK_SUBDOMAIN }}
-          TF_VAR_cyberark_client_id: ${{ secrets.CYBERARK_CLIENT_ID }}
-          TF_VAR_cyberark_client_secret: ${{ secrets.CYBERARK_CLIENT_SECRET }}
+          TF_VAR_cyberark_client_id: ${{ steps.cyberark_creds.outputs.client-id }}
+          TF_VAR_cyberark_client_secret: ${{ steps.cyberark_creds.outputs.client-secret }}
           TF_VAR_account_id: ${{ needs.provision-account.outputs.account_id }}
           TF_VAR_account_name: ${{ needs.parse-request.outputs.account_name }}
           TF_VAR_org_management_account_id: ${{ secrets.AWS_MANAGEMENT_ACCOUNT_ID }}

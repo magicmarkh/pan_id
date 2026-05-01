@@ -59,6 +59,7 @@ GitHub Issue Form (multi-select) → GitHub Actions → [production gate]
 
 ## Key Design Decisions (Already Made — Do Not Revisit Unless Asked)
 - **CyberArk SCA auth:** OAuth2 confidential client (`service_user` / `service_token`) via idsec Terraform provider; tenant identified by `subdomain` only (not full URL). The `subdomain` value must be the ISP tenant *name* (prefix of `<name>.cyberark.cloud`), NOT the underlying Identity tenant ID (prefix of `<id>.id.cyberark.cloud`). The provider resolves all service endpoints via `platform-discovery.cyberark.cloud/api/v2/services/subdomain/<name>`.
+- **CyberArk OAuth credential storage:** The OAuth `client_id` / `client_secret` are stored as variables in CyberArk Conjur Cloud, NOT as GitHub repository secrets. Workflows fetch them at runtime by exchanging the GitHub Actions OIDC JWT for a Conjur access token via the `authn-jwt/<service-id>` authenticator, then reading the variables. See `.github/actions/fetch-cyberark-creds/action.yml` and [docs/conjur-cloud-setup.md](docs/conjur-cloud-setup.md). This eliminates long-lived CyberArk credentials from the repo and centralizes rotation in Conjur. Jobs that need the creds must declare `permissions: id-token: write`.
 - **SCA policy principals:** All three policies (PowerUser, Audit, CloudOps) use ROLE principals (type=ROLE in the idsec API). CyberArk Identity's role-based access construct is what SCA expects — what looks like a "Group" in the admin UI is exposed as a Role in the SCA API. Per-user (USER) principals were dropped because GitHub usernames are not federated with the CyberArk Identity tenant. Add demo users to the relevant CyberArk Identity roles instead of federating.
 - **AWS credential flow:** GitHub OIDC → `GitHubActionsOrgProvisioner` IAM role — no static AWS keys
 - **Approval gate:** GitHub Environments (`environment: production`) on every destructive job
@@ -94,12 +95,24 @@ pan_id/
 └── README.md
 ```
 
+## GitHub Repository Variables Required (non-secret)
+
+These live under **Settings → Secrets and variables → Actions → Variables** and
+configure the Conjur Cloud lookup performed by
+`.github/actions/fetch-cyberark-creds`:
+
+| Variable | Description |
+|---|---|
+| `CONJUR_HOST_ID` | Conjur host id (e.g. `data/github/pan_id/pan_id`) — the workload identity the GitHub OIDC JWT maps to. The composite action prepends `host/` automatically. |
+| `CONJUR_AUTHN_JWT_SERVICE_ID` | Service ID of the Conjur authn-jwt authenticator (e.g. `github`) |
+| `CONJUR_CLIENT_ID_VARIABLE` | Conjur variable path for the CyberArk Identity OAuth `client_id` (e.g. `data/github/pan_id/cyberark-identity/client-id`) |
+| `CONJUR_CLIENT_SECRET_VARIABLE` | Conjur variable path for the CyberArk Identity OAuth `client_secret` |
+
 ## GitHub Secrets Required
 | Secret | Description |
 |---|---|
 | `CYBERARK_SUBDOMAIN` | ISP tenant subdomain **name** e.g. `murphyslab` — the prefix of `<subdomain>.cyberark.cloud`. NOT the Identity tenant ID (e.g. `abv4527`). Used by idsec provider via `platform-discovery.cyberark.cloud/api/v2/services/subdomain/<value>` |
-| `CYBERARK_CLIENT_ID` | OAuth2 service account client ID (`service_user` in idsec provider) |
-| `CYBERARK_CLIENT_SECRET` | OAuth2 service account client secret (`service_token` in idsec provider) |
+| `CONJUR_SUBDOMAIN` | Conjur Cloud tenant subdomain — prefix of `<subdomain>.secretsmgr.cyberark.cloud`. The OAuth `client_id` / `client_secret` are retrieved from this tenant at runtime via GitHub OIDC and are NOT stored as GitHub secrets. See [docs/conjur-cloud-setup.md](docs/conjur-cloud-setup.md). |
 | `AWS_MANAGEMENT_ACCOUNT_ID` | 12-digit management account ID (used to construct the GitHubActionsOrgProvisioner IAM role ARN) |
 | `AWS_POOL_OU_ID` | OU ID containing pre-staged lab accounts (provision dropdown source) |
 | `AWS_ACTIVE_OU_ID` | OU ID where assigned/active accounts live (deprovision dropdown source) |
@@ -173,6 +186,7 @@ The `refresh-issue-templates.yml` workflow reads these tags to populate dropdown
 - [x] `modules/cyberark-policy/` — three `idsec_policy_cloud_access` resources
 - [x] `use-cases/aws-account-vending/` — Create mode Terraform config
 - [x] `use-cases/cyberark-sca-policy/` — SCA policy Terraform config (idsec provider only)
+- [x] CyberArk OAuth credentials sourced from Conjur Cloud at runtime via GitHub OIDC (composite action `.github/actions/fetch-cyberark-creds`); `CYBERARK_CLIENT_ID` / `CYBERARK_CLIENT_SECRET` removed from GitHub repository secrets
 
 ## What's NOT Built Yet (Next Phases)
 

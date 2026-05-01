@@ -110,9 +110,14 @@ This system provides a self-service AWS account vending machine that:
 ### Prerequisites
 
 1. **GitHub Repository Secrets**: Configure the following secrets in your repository settings:
-   - `CYBERARK_SUBDOMAIN`: Tenant subdomain only (e.g. `abc1234`, not the full URL)
-   - `CYBERARK_CLIENT_ID`: OAuth2 client ID for CyberArk Identity
-   - `CYBERARK_CLIENT_SECRET`: OAuth2 client secret for CyberArk Identity
+   - `CYBERARK_SUBDOMAIN`: ISP tenant subdomain only (e.g. `abc1234`, not the full URL)
+   - `CONJUR_SUBDOMAIN`: Conjur Cloud tenant subdomain (prefix of `<subdomain>.secretsmgr.cyberark.cloud`)
+
+   The CyberArk Identity OAuth `client_id` / `client_secret` are **not** stored
+   in GitHub. They are retrieved at runtime from CyberArk Conjur Cloud using
+   the GitHub Actions OIDC token. Follow [docs/conjur-cloud-setup.md](docs/conjur-cloud-setup.md)
+   to configure the Conjur authn-jwt authenticator, host identity, and
+   variables, plus the four `CONJUR_*` repository variables the workflows read.
 
 2. **GitHub Environment**: Create a `production` environment in your repository settings with required reviewers for approval gates
 
@@ -128,9 +133,12 @@ This system provides a self-service AWS account vending machine that:
    cd <repository-name>
    ```
 
-2. **Configure GitHub Secrets**:
+2. **Configure GitHub Secrets and Variables**:
    - Navigate to **Settings** → **Secrets and variables** → **Actions**
-   - Add the three required CyberArk secrets
+   - Add `CYBERARK_SUBDOMAIN` and `CONJUR_SUBDOMAIN` under **Secrets**
+   - Add `CONJUR_HOST_ID`, `CONJUR_AUTHN_JWT_SERVICE_ID`,
+     `CONJUR_CLIENT_ID_VARIABLE`, `CONJUR_CLIENT_SECRET_VARIABLE` under
+     **Variables** (see [docs/conjur-cloud-setup.md](docs/conjur-cloud-setup.md))
 
 3. **Set up Production Environment**:
    - Navigate to **Settings** → **Environments**

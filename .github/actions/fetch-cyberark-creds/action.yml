@@ -1,0 +1,119 @@
+name: "Fetch CyberArk OAuth credentials from Conjur Cloud"
+description: >-
+  Exchanges the GitHub Actions OIDC token for a Conjur Cloud access token via
+  the authn-jwt authenticator, then retrieves the CyberArk Identity OAuth
+  client_id and client_secret. Outputs are registered as masked values so they
+  cannot leak into logs.
+
+inputs:
+  conjur-subdomain:
+    description: "Conjur Cloud tenant subdomain (prefix of <subdomain>.secretsmgr.cyberark.cloud)"
+    required: true
+  conjur-account:
+    description: "Conjur account name"
+    required: false
+    default: "conjur"
+  authn-jwt-service-id:
+    description: "Service ID of the authn-jwt authenticator configured in Conjur"
+    required: false
+    default: "github"
+  conjur-host-id:
+    description: "Conjur host identity (workload) the JWT maps to, e.g. 'data/github/pan_id'"
+    required: true
+  client-id-variable:
+    description: "Conjur variable path holding the CyberArk Identity OAuth client_id"
+    required: true
+  client-secret-variable:
+    description: "Conjur variable path holding the CyberArk Identity OAuth client_secret"
+    required: true
+
+outputs:
+  client-id:
+    description: "CyberArk Identity OAuth client_id"
+    value: ${{ steps.fetch.outputs.client-id }}
+  client-secret:
+    description: "CyberArk Identity OAuth client_secret"
+    value: ${{ steps.fetch.outputs.client-secret }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Retrieve CyberArk creds via Conjur Cloud authn-jwt
+      id: fetch
+      shell: bash
+      env:
+        CONJUR_SUBDOMAIN: ${{ inputs.conjur-subdomain }}
+        CONJUR_ACCOUNT: ${{ inputs.conjur-account }}
+        CONJUR_SERVICE_ID: ${{ inputs.authn-jwt-service-id }}
+        CONJUR_HOST_ID: ${{ inputs.conjur-host-id }}
+        CLIENT_ID_VAR: ${{ inputs.client-id-variable }}
+        CLIENT_SECRET_VAR: ${{ inputs.client-secret-variable }}
+      run: |
+        set -euo pipefail
+
+        if [ -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ] || [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+          echo "❌ OIDC token endpoint not available. The calling job needs 'permissions: id-token: write'."
+          exit 1
+        fi
+
+        CONJUR_BASE="https://${CONJUR_SUBDOMAIN}.secretsmgr.cyberark.cloud/api"
+
+        echo "Requesting GitHub OIDC token (audience: conjur)..."
+        JWT=$(curl -fsSL \
+          -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+          -H "Accept: application/json" \
+          "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=conjur" | jq -r '.value')
+
+        if [ -z "${JWT}" ] || [ "${JWT}" = "null" ]; then
+          echo "❌ Failed to obtain GitHub OIDC token"
+          exit 1
+        fi
+
+        # Conjur expects the host id URL-encoded inside the path
+        HOST_ENC=$(jq -rn --arg v "host/${CONJUR_HOST_ID}" '$v|@uri')
+
+        echo "Authenticating to Conjur Cloud (service: ${CONJUR_SERVICE_ID})..."
+        ACCESS_TOKEN=$(curl -fsSL \
+          -X POST \
+          -H "Content-Type: application/x-www-form-urlencoded" \
+          -H "Accept-Encoding: base64" \
+          --data-urlencode "jwt=${JWT}" \
+          "${CONJUR_BASE}/authn-jwt/${CONJUR_SERVICE_ID}/${CONJUR_ACCOUNT}/${HOST_ENC}/authenticate")
+
+        if [ -z "${ACCESS_TOKEN}" ]; then
+          echo "❌ Conjur returned empty access token"
+          exit 1
+        fi
+
+        fetch_secret() {
+          local var_path="$1"
+          local enc
+          enc=$(jq -rn --arg v "${var_path}" '$v|@uri')
+          curl -fsSL \
+            -H "Authorization: Token token=\"${ACCESS_TOKEN}\"" \
+            "${CONJUR_BASE}/secrets/${CONJUR_ACCOUNT}/variable/${enc}"
+        }
+
+        echo "Fetching ${CLIENT_ID_VAR}..."
+        CLIENT_ID_VALUE=$(fetch_secret "${CLIENT_ID_VAR}")
+        echo "Fetching ${CLIENT_SECRET_VAR}..."
+        CLIENT_SECRET_VALUE=$(fetch_secret "${CLIENT_SECRET_VAR}")
+
+        if [ -z "${CLIENT_ID_VALUE}" ] || [ -z "${CLIENT_SECRET_VALUE}" ]; then
+          echo "❌ One or both retrieved secrets were empty"
+          exit 1
+        fi
+
+        echo "::add-mask::${CLIENT_ID_VALUE}"
+        echo "::add-mask::${CLIENT_SECRET_VALUE}"
+
+        {
+          echo "client-id<<__EOF__"
+          echo "${CLIENT_ID_VALUE}"
+          echo "__EOF__"
+          echo "client-secret<<__EOF__"
+          echo "${CLIENT_SECRET_VALUE}"
+          echo "__EOF__"
+        } >> "${GITHUB_OUTPUT}"
+
+        echo "✅ Retrieved CyberArk OAuth credentials from Conjur Cloud"
