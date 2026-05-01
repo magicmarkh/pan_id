@@ -361,7 +361,7 @@ jobs:
           TF_VAR_cloudops_role_name: ${{ secrets.CYBERARK_CLOUDOPS_ROLE }}
           TF_LOG: DEBUG
           TF_LOG_PATH: /tmp/tf-debug.log
-        run: terraform apply -auto-approve -no-color
+        run: terraform apply -auto-approve -no-color -parallelism=1
 
       - name: Surface SCA API error response (debug)
         if: failure()
