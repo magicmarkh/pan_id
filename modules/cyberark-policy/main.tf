@@ -6,6 +6,20 @@ terraform {
       source  = "cyberark/idsec"
       version = ">= 0.1.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.6"
+    }
+  }
+}
+
+resource "random_string" "policy_suffix" {
+  length  = 6
+  upper   = false
+  special = false
+
+  keepers = {
+    account_id = var.account_id
   }
 }
 
@@ -19,7 +33,7 @@ locals {
 
 resource "idsec_policy_cloud_access" "power_user" {
   metadata = {
-    name        = "aws-${var.account_name}-poweruser-1"
+    name        = "aws-${var.account_name}-poweruser-${random_string.policy_suffix.result}"
     description = "PowerUser-access-${var.account_name}-${var.account_id}"
     status = {
       status = "Active"
@@ -56,7 +70,7 @@ resource "idsec_policy_cloud_access" "power_user" {
 
 resource "idsec_policy_cloud_access" "audit" {
   metadata = {
-    name        = "aws-${var.account_name}-audit"
+    name        = "aws-${var.account_name}-audit-${random_string.policy_suffix.result}"
     description = "Audit-readonly-access-${var.account_name}-${var.account_id}"
     status = {
       status = "Active"
@@ -93,7 +107,7 @@ resource "idsec_policy_cloud_access" "audit" {
 
 resource "idsec_policy_cloud_access" "cloudops" {
   metadata = {
-    name        = "aws-${var.account_name}-cloudops-1"
+    name        = "aws-${var.account_name}-cloudops-${random_string.policy_suffix.result}"
     description = "CloudOps-admin-access-${var.account_name}-${var.account_id}"
     status = {
       status = "Active"

@@ -401,6 +401,20 @@ jobs:
               labels: ['provision-aws-account', 'provisioned']
             });
 
+      - name: Trigger Refresh Issue Templates
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'refresh-issue-templates.yml',
+              ref: context.ref
+            });
+            console.log('Triggered Refresh Issue Templates workflow');
+
       - name: Comment SCA failure
         if: failure()
         uses: actions/github-script@v7

@@ -67,6 +67,7 @@ GitHub Issue Form (multi-select) → GitHub Actions → [production gate]
 - **Multi-account deprovision parsing:** comma-separated multi-select string → JSON array `[{id, name}, ...]` consumed by `strategy.matrix`
 - **OU return on deprovision:** uses `aws organizations list-parents` to confirm current parent, then moves only if the account is in the active OU. Skipped if already in pool. Fails if account is in any other OU (defends adjacent demo environments).
 - **SCA policy state:** GitHub Actions artifact (not S3) — sufficient for demo lifecycle (90-day retention)
+- **SCA policy naming:** policy names get a 6-char `random_string` suffix (`aws-<account_name>-<role>-<suffix>`) so the same `account_name` can cycle through provision → deprovision → re-provision without hitting `UAP1000 The policy name must be unique`. The suffix is keyed on `account_id` so it's stable within one terraform state, but a fresh apply (post-deprovision) gets a new suffix.
 - **Terraform state for account vending:** Local (S3 backend stubbed and commented in `main.tf`)
 - **idsec provider version:** `cyberark/idsec >= 0.1.0` (only 0.x releases exist — DO NOT use `~> 1.0`)
 - **AWS provider version:** `hashicorp/aws ~> 5.0`
