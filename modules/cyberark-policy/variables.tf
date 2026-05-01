@@ -67,8 +67,3 @@ variable "access_window_to_hour" {
   default     = "18:00:00"
 }
 
-variable "policy_create_delay" {
-  description = "Wall-clock delay between SCA policy creates targeting the same workspace. Spaces out requests so the SCA backend doesn't 1101-rate-limit or land follow-up policies in 'Error' state."
-  type        = string
-  default     = "60s"
-}

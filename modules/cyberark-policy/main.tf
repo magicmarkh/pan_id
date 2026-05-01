@@ -23,7 +23,7 @@ locals {
 
 resource "idsec_policy_cloud_access" "power_user" {
   metadata = {
-    name        = "aws-${var.account_name}-poweruser"
+    name        = "aws-${var.account_name}-poweruser-1"
     description = "PowerUser-access-${var.account_name}-${var.account_id}"
     status = {
       status = "Active"
@@ -58,14 +58,7 @@ resource "idsec_policy_cloud_access" "power_user" {
   }
 }
 
-resource "time_sleep" "after_power_user" {
-  depends_on      = [idsec_policy_cloud_access.power_user]
-  create_duration = var.policy_create_delay
-}
-
 resource "idsec_policy_cloud_access" "audit" {
-  depends_on = [time_sleep.after_power_user]
-
   metadata = {
     name        = "aws-${var.account_name}-audit"
     description = "Audit-readonly-access-${var.account_name}-${var.account_id}"
@@ -102,16 +95,9 @@ resource "idsec_policy_cloud_access" "audit" {
   }
 }
 
-resource "time_sleep" "after_audit" {
-  depends_on      = [idsec_policy_cloud_access.audit]
-  create_duration = var.policy_create_delay
-}
-
 resource "idsec_policy_cloud_access" "cloudops" {
-  depends_on = [time_sleep.after_audit]
-
   metadata = {
-    name        = "aws-${var.account_name}-cloudops"
+    name        = "aws-${var.account_name}-cloudops-1"
     description = "CloudOps-admin-access-${var.account_name}-${var.account_id}"
     status = {
       status = "Active"
