@@ -39,6 +39,7 @@ body:
     - test-2 | 210806259509
     - test-3 | 422546939722
     - test-1 | 900360460826
+    - sandbox 2 | 841162681454
   validations:
     required: false
 - type: input
