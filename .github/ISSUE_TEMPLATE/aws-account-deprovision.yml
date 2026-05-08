@@ -25,6 +25,7 @@ body:
       '
     options:
     - sandbox 1 | 396913732694
+    - test-3 | 422546939722
   validations:
     required: true
 - type: dropdown
