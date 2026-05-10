@@ -24,6 +24,7 @@ body:
 
       '
     options:
+    - sandbox 2 | 841162681454
     - sandbox 1 | 396913732694
   validations:
     required: true
