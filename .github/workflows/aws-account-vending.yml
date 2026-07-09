@@ -434,3 +434,139 @@ jobs:
 
               [View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`
             });
+
+  apply-sia-infrastructure:
+    needs: [parse-request, provision-account]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_MANAGEMENT_ACCOUNT_ID }}:role/GitHubActionsOrgProvisioner
+          aws-region: us-east-1
+          role-session-name: GitHubActions-SIAInfra-${{ github.run_id }}
+
+      - name: Wait for child account role to be assumable
+        run: |
+          ACCOUNT_ID="${{ needs.provision-account.outputs.account_id }}"
+          ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/OrganizationAccountAccessRole"
+          for i in 1 2 3 4 5 6; do
+            if aws sts assume-role --role-arn "$ROLE_ARN" \
+                 --role-session-name probe-${{ github.run_id }} \
+                 --duration-seconds 900 >/dev/null 2>&1; then
+              echo "✅ OrganizationAccountAccessRole in $ACCOUNT_ID is assumable"
+              exit 0
+            fi
+            echo "⏳ Attempt $i: role not assumable yet, waiting 15s…"
+            sleep 15
+          done
+          echo "❌ Could not assume OrganizationAccountAccessRole in $ACCOUNT_ID after retries"
+          exit 1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.14.9"
+
+      - name: Terraform Init (SIA Infrastructure)
+        working-directory: ./use-cases/aws-sia-infrastructure
+        run: terraform init
+
+      - name: Validate CyberArk tenant reachability
+        env:
+          SUBDOMAIN: ${{ secrets.CYBERARK_SUBDOMAIN }}
+        run: |
+          if [ -z "$SUBDOMAIN" ]; then
+            echo "❌ CYBERARK_SUBDOMAIN secret is empty"
+            exit 1
+          fi
+          case "$SUBDOMAIN" in
+            http://*|https://*|*.*|*" "*|*$'\t'*|*$'\n'*|*$'\r'*)
+              echo "❌ CYBERARK_SUBDOMAIN must be just the tenant prefix (e.g. 'abc1234'), no scheme/dots/whitespace"
+              exit 1 ;;
+          esac
+
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://platform-discovery.cyberark.cloud/api/v2/services/subdomain/${SUBDOMAIN}")
+          echo "Platform discovery HTTP status: $HTTP_CODE"
+          case "$HTTP_CODE" in
+            200) echo "✅ ISP tenant resolves via platform discovery" ;;
+            404)
+              echo "❌ 404 — CYBERARK_SUBDOMAIN does not match an ISP tenant subdomain."
+              exit 1 ;;
+            *)
+              echo "⚠️ Unexpected HTTP $HTTP_CODE from platform discovery"
+              exit 1 ;;
+          esac
+
+      - name: Terraform Apply (SIA Infrastructure)
+        id: sia_infra_apply
+        working-directory: ./use-cases/aws-sia-infrastructure
+        env:
+          TF_VAR_account_id: ${{ needs.provision-account.outputs.account_id }}
+          TF_VAR_account_name: ${{ needs.parse-request.outputs.account_name }}
+          TF_VAR_cyberark_subdomain: ${{ secrets.CYBERARK_SUBDOMAIN }}
+          TF_VAR_cyberark_client_id: ${{ secrets.CYBERARK_CLIENT_ID }}
+          TF_VAR_cyberark_client_secret: ${{ secrets.CYBERARK_CLIENT_SECRET }}
+        run: terraform apply -auto-approve -no-color
+
+      - name: Capture SIA infrastructure outputs
+        id: sia_outputs
+        if: success()
+        working-directory: ./use-cases/aws-sia-infrastructure
+        run: |
+          echo "vpc_id=$(terraform output -raw vpc_id 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
+          echo "sia_pool_name=$(terraform output -raw sia_pool_name 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
+
+      - name: Upload SIA Infrastructure state
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sia-infra-tfstate-${{ needs.provision-account.outputs.account_id }}
+          path: ./use-cases/aws-sia-infrastructure/terraform.tfstate
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Comment SIA infrastructure success
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `### 🌐 SIA Infrastructure Provisioned
+
+              A cost-free VPC (no NAT gateway) was created in account \`${{ needs.provision-account.outputs.account_id }}\`, and a CyberArk Secure Infrastructure Access policy now scopes access to it:
+
+              | Item | Value |
+              |---|---|
+              | **VPC** | \`${{ steps.sia_outputs.outputs.vpc_id }}\` |
+              | **SIA Pool** | \`${{ steps.sia_outputs.outputs.sia_pool_name }}\` |
+              | **Scope** | VPC + private subnet + account \`${{ needs.provision-account.outputs.account_id }}\` |
+
+              No compute was provisioned (no billable resources). Add EC2/SIA connectors during a live demo when needed.`
+            });
+
+      - name: Comment SIA infrastructure failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `### ⚠️ SIA Infrastructure Provisioning Failed
+
+              Account provisioning succeeded, but the VPC and/or CyberArk SIA access policy could not be created.
+
+              [View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`
+            });

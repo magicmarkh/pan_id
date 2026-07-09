@@ -147,6 +147,72 @@ jobs:
         if: steps.find_sca_state.outputs.found != 'true'
         run: echo "⚠️ No SCA policies state found for ${{ matrix.account.id }} — skipping policy removal"
 
+      # ── SIA infrastructure teardown (VPC + CyberArk SIA access policy) ────────
+      - name: Find SIA infrastructure state artifact
+        id: find_sia_state
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const accountId = "${{ matrix.account.id }}";
+            const artifactName = `sia-infra-tfstate-${accountId}`;
+
+            const { data } = await github.rest.actions.listArtifactsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: artifactName,
+              per_page: 10
+            });
+
+            const active = data.artifacts
+              .filter(a => !a.expired)
+              .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+            if (active.length === 0) {
+              core.warning(`No active SIA infrastructure state artifact found for account ${accountId} — skipping VPC/SIA removal`);
+              core.setOutput('found', 'false');
+              return;
+            }
+
+            core.setOutput('found', 'true');
+            core.setOutput('run_id', String(active[0].workflow_run.id));
+            console.log(`Found artifact ${artifactName} from run ${active[0].workflow_run.id}`);
+
+      - name: Download SIA infrastructure state
+        if: steps.find_sia_state.outputs.found == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: sia-infra-tfstate-${{ matrix.account.id }}
+          path: ./use-cases/aws-sia-infrastructure
+          run-id: ${{ steps.find_sia_state.outputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Terraform (SIA Infrastructure)
+        if: steps.find_sia_state.outputs.found == 'true'
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.14.9"
+
+      - name: Terraform Init (SIA Infrastructure)
+        if: steps.find_sia_state.outputs.found == 'true'
+        working-directory: ./use-cases/aws-sia-infrastructure
+        run: terraform init
+
+      - name: Terraform Destroy (SIA Infrastructure)
+        if: steps.find_sia_state.outputs.found == 'true'
+        working-directory: ./use-cases/aws-sia-infrastructure
+        env:
+          TF_VAR_account_id: ${{ matrix.account.id }}
+          TF_VAR_account_name: ${{ matrix.account.name }}
+          TF_VAR_cyberark_subdomain: ${{ secrets.CYBERARK_SUBDOMAIN }}
+          TF_VAR_cyberark_client_id: ${{ secrets.CYBERARK_CLIENT_ID }}
+          TF_VAR_cyberark_client_secret: ${{ secrets.CYBERARK_CLIENT_SECRET }}
+        run: terraform destroy -auto-approve -no-color
+
+      - name: No SIA infrastructure state found
+        if: steps.find_sia_state.outputs.found != 'true'
+        run: echo "⚠️ No SIA infrastructure state found for ${{ matrix.account.id }} — skipping VPC/SIA removal"
+
       - name: Return account to pool (Simulate)
         if: needs.parse-request.outputs.mode == 'Simulate'
         run: |

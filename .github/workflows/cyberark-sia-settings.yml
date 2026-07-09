@@ -1,0 +1,66 @@
+name: CyberArk SIA Settings (one-time)
+
+# Tenant-wide SIA settings are SINGLETON objects — run this ONCE per tenant
+# (or when you want to change the settings). It is deliberately NOT part of the
+# per-account vending flow. Manual trigger only.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  apply-sia-settings:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.14.9"
+
+      - name: Terraform Init (SIA Settings)
+        working-directory: ./use-cases/cyberark-sia-settings
+        run: terraform init
+
+      - name: Validate CyberArk tenant reachability
+        env:
+          SUBDOMAIN: ${{ secrets.CYBERARK_SUBDOMAIN }}
+        run: |
+          if [ -z "$SUBDOMAIN" ]; then
+            echo "❌ CYBERARK_SUBDOMAIN secret is empty"
+            exit 1
+          fi
+          case "$SUBDOMAIN" in
+            http://*|https://*|*.*|*" "*|*$'\t'*|*$'\n'*|*$'\r'*)
+              echo "❌ CYBERARK_SUBDOMAIN must be just the tenant prefix (e.g. 'abc1234'), no scheme/dots/whitespace"
+              exit 1 ;;
+          esac
+
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://platform-discovery.cyberark.cloud/api/v2/services/subdomain/${SUBDOMAIN}")
+          echo "Platform discovery HTTP status: $HTTP_CODE"
+          case "$HTTP_CODE" in
+            200) echo "✅ ISP tenant resolves via platform discovery" ;;
+            404)
+              echo "❌ 404 — CYBERARK_SUBDOMAIN does not match an ISP tenant subdomain."
+              exit 1 ;;
+            *)
+              echo "⚠️ Unexpected HTTP $HTTP_CODE from platform discovery"
+              exit 1 ;;
+          esac
+
+      - name: Terraform Apply (SIA Settings)
+        working-directory: ./use-cases/cyberark-sia-settings
+        env:
+          TF_VAR_cyberark_subdomain: ${{ secrets.CYBERARK_SUBDOMAIN }}
+          TF_VAR_cyberark_client_id: ${{ secrets.CYBERARK_CLIENT_ID }}
+          TF_VAR_cyberark_client_secret: ${{ secrets.CYBERARK_CLIENT_SECRET }}
+        run: terraform apply -auto-approve -no-color
