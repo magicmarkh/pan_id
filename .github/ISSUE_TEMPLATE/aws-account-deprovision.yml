@@ -24,7 +24,7 @@ body:
 
       '
     options:
-    - sandbox 2 | 841162681454
+    - No accounts found — check AWS Organizations
   validations:
     required: true
 - type: dropdown
