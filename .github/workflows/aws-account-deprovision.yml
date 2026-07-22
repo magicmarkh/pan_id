@@ -125,13 +125,20 @@ jobs:
         working-directory: ./use-cases/cyberark-sca-policy
         run: terraform init
 
+      - name: Fetch CyberArk credentials from Conjur Cloud
+        if: steps.find_sca_state.outputs.found == 'true'
+        uses: cyberark/conjur-action@v2.2.2
+        with:
+          url: ${{ secrets.CONJUR_URL }}
+          account: ${{ secrets.CONJUR_ACCOUNT }}
+          authn_id: ${{ secrets.CONJUR_AUTHN_ID }}
+          secrets: "data/vault/m-priv-svc-accts/murphys-lab-svc-mh/username|TF_VAR_cyberark_client_id;data/vault/m-priv-svc-accts/murphys-lab-svc-mh/password|TF_VAR_cyberark_client_secret"
+
       - name: Terraform Destroy (SCA Policies)
         if: steps.find_sca_state.outputs.found == 'true'
         working-directory: ./use-cases/cyberark-sca-policy
         env:
           TF_VAR_cyberark_subdomain: ${{ secrets.CYBERARK_SUBDOMAIN }}
-          TF_VAR_cyberark_client_id: ${{ secrets.CYBERARK_CLIENT_ID }}
-          TF_VAR_cyberark_client_secret: ${{ secrets.CYBERARK_CLIENT_SECRET }}
           TF_VAR_account_id: ${{ matrix.account.id }}
           TF_VAR_account_name: ${{ matrix.account.name }}
           TF_VAR_org_management_account_id: ${{ secrets.AWS_MANAGEMENT_ACCOUNT_ID }}

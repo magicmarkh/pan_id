@@ -60,6 +60,7 @@ GitHub Issue Form (multi-select) → GitHub Actions → [production gate]
 ## Key Design Decisions (Already Made — Do Not Revisit Unless Asked)
 - **CyberArk SCA auth:** OAuth2 confidential client (`service_user` / `service_token`) via idsec Terraform provider; tenant identified by `subdomain` only (not full URL). The `subdomain` value must be the ISP tenant *name* (prefix of `<name>.cyberark.cloud`), NOT the underlying Identity tenant ID (prefix of `<id>.id.cyberark.cloud`). The provider resolves all service endpoints via `platform-discovery.cyberark.cloud/api/v2/services/subdomain/<name>`.
 - **SCA policy principals:** All three policies (PowerUser, Audit, CloudOps) use ROLE principals (type=ROLE in the idsec API). CyberArk Identity's role-based access construct is what SCA expects — what looks like a "Group" in the admin UI is exposed as a Role in the SCA API. Per-user (USER) principals were dropped because GitHub usernames are not federated with the CyberArk Identity tenant. Add demo users to the relevant CyberArk Identity roles instead of federating.
+- **CyberArk OAuth2 credential flow:** GitHub OIDC JWT → Conjur Cloud (`cyberark/conjur-action@v2.2.2`, `authn-jwt` authenticator) → `CYBERARK_CLIENT_ID` + `CYBERARK_CLIENT_SECRET` fetched at runtime into `TF_VAR_*` env vars. Conjur variable paths: `data/vault/m-priv-svc-accts/murphys-lab-svc-mh/username` (client ID) and `.../password` (client secret). Static GitHub secrets `CYBERARK_CLIENT_ID` / `CYBERARK_CLIENT_SECRET` have been removed; replaced by `CONJUR_URL`, `CONJUR_ACCOUNT`, `CONJUR_AUTHN_ID`.
 - **AWS credential flow:** GitHub OIDC → `GitHubActionsOrgProvisioner` IAM role — no static AWS keys
 - **Approval gate:** GitHub Environments (`environment: production`) on every destructive job
 - **Issue parsing:** `stefanbuck/github-issue-parser@v3` maps issue form fields to job outputs
@@ -98,8 +99,11 @@ pan_id/
 | Secret | Description |
 |---|---|
 | `CYBERARK_SUBDOMAIN` | ISP tenant subdomain **name** e.g. `murphyslab` — the prefix of `<subdomain>.cyberark.cloud`. NOT the Identity tenant ID (e.g. `abv4527`). Used by idsec provider via `platform-discovery.cyberark.cloud/api/v2/services/subdomain/<value>` |
-| `CYBERARK_CLIENT_ID` | OAuth2 service account client ID (`service_user` in idsec provider) |
-| `CYBERARK_CLIENT_SECRET` | OAuth2 service account client secret (`service_token` in idsec provider) |
+| ~~`CYBERARK_CLIENT_ID`~~ | **Removed** — now fetched from Conjur Cloud at runtime |
+| ~~`CYBERARK_CLIENT_SECRET`~~ | **Removed** — now fetched from Conjur Cloud at runtime |
+| `CONJUR_URL` | Conjur Cloud SaaS endpoint e.g. `https://<tenant>.secretsmgr.cyberark.cloud` |
+| `CONJUR_ACCOUNT` | Conjur account name — typically `conjur` for Conjur Cloud |
+| `CONJUR_AUTHN_ID` | JWT authenticator service ID configured in Conjur policy (e.g. `github`) |
 | `AWS_MANAGEMENT_ACCOUNT_ID` | 12-digit management account ID (used to construct the GitHubActionsOrgProvisioner IAM role ARN) |
 | `AWS_POOL_OU_ID` | OU ID containing pre-staged lab accounts (provision dropdown source) |
 | `AWS_ACTIVE_OU_ID` | OU ID where assigned/active accounts live (deprovision dropdown source) |
