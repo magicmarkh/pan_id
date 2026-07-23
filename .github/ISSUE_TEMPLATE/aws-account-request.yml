@@ -36,7 +36,7 @@ body:
 
       '
     options:
-    - No available accounts — check pool OU tags (Status=Available)
+    - sandbox 1 | 396913732694
   validations:
     required: false
 - type: input
