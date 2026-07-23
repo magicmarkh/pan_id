@@ -36,12 +36,7 @@ body:
 
       '
     options:
-    - test-2 | 210806259509
-    - test-3 | 422546939722
-    - test-1 | 900360460826
-    - sandbox 3 | 588738594421
-    - sandbox 1 | 396913732694
-    - sandbox 2 | 841162681454
+    - No available accounts — check pool OU tags (Status=Available)
   validations:
     required: false
 - type: input
