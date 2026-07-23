@@ -49,3 +49,10 @@ body:
     placeholder: Demo complete, returning to pool
   validations:
     required: true
+- type: checkboxes
+  id: skip_sca
+  attributes:
+    label: Advanced Options
+    options:
+    - label: Skip SCA policy deletion (use when policies no longer exist or Terraform
+        state is corrupt)

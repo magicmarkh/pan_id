@@ -20,6 +20,7 @@ jobs:
     outputs:
       accounts_json: ${{ steps.parse_accounts.outputs.accounts_json }}
       mode: ${{ steps.parse.outputs.issueparser_mode }}
+      skip_sca: ${{ steps.parse.outputs.issueparser_skip_sca }}
 
     steps:
       - name: Checkout repository
@@ -77,6 +78,7 @@ jobs:
 
       - name: Find SCA state artifact
         id: find_sca_state
+        if: needs.parse-request.outputs.skip_sca == ''
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -153,8 +155,12 @@ jobs:
         run: terraform destroy -auto-approve -no-color
 
       - name: No SCA state found
-        if: steps.find_sca_state.outputs.found != 'true'
+        if: needs.parse-request.outputs.skip_sca == '' && steps.find_sca_state.outputs.found != 'true'
         run: echo "⚠️ No SCA policies state found for ${{ matrix.account.id }} — skipping policy removal"
+
+      - name: SCA policy deletion skipped
+        if: needs.parse-request.outputs.skip_sca != ''
+        run: echo "⏭️ SCA policy deletion skipped by request — proceeding to account return"
 
       - name: Return account to pool (Simulate)
         if: needs.parse-request.outputs.mode == 'Simulate'
