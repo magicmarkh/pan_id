@@ -132,13 +132,15 @@ jobs:
           url: ${{ secrets.CONJUR_URL }}
           account: ${{ secrets.CONJUR_ACCOUNT }}
           authn_id: ${{ secrets.CONJUR_AUTHN_ID }}
-          secrets: "data/vault/m-priv-svc-accts/murphys-lab-svc-mh/username|TF_VAR_cyberark_client_id;data/vault/m-priv-svc-accts/murphys-lab-svc-mh/password|TF_VAR_cyberark_client_secret"
+          secrets: "data/vault/m-priv-svc-accts/murphys-lab-svc-mh/username|CYBERARK_CLIENT_ID;data/vault/m-priv-svc-accts/murphys-lab-svc-mh/password|CYBERARK_CLIENT_SECRET"
 
       - name: Terraform Destroy (SCA Policies)
         if: steps.find_sca_state.outputs.found == 'true'
         working-directory: ./use-cases/cyberark-sca-policy
         env:
           TF_VAR_cyberark_subdomain: ${{ secrets.CYBERARK_SUBDOMAIN }}
+          TF_VAR_cyberark_client_id: ${{ env.CYBERARK_CLIENT_ID }}
+          TF_VAR_cyberark_client_secret: ${{ env.CYBERARK_CLIENT_SECRET }}
           TF_VAR_account_id: ${{ matrix.account.id }}
           TF_VAR_account_name: ${{ matrix.account.name }}
           TF_VAR_org_management_account_id: ${{ secrets.AWS_MANAGEMENT_ACCOUNT_ID }}
