@@ -104,6 +104,8 @@ pan_id/
 | `CONJUR_URL` | Conjur Cloud SaaS endpoint e.g. `https://<tenant>.secretsmgr.cyberark.cloud` |
 | `CONJUR_ACCOUNT` | Conjur account name — typically `conjur` for Conjur Cloud |
 | `CONJUR_AUTHN_ID` | JWT authenticator service ID configured in Conjur policy (e.g. `github`) |
+| `SCA_SERVICE_ACCT_USERNAME_PATH` | Conjur variable path for the idsec service user client ID e.g. `data/vault/<safe>/<account>/username` |
+| `SCA_SERVICE_ACCT_PASSWORD_PATH` | Conjur variable path for the idsec service user client secret e.g. `data/vault/<safe>/<account>/password` |
 | `AWS_MANAGEMENT_ACCOUNT_ID` | 12-digit management account ID (used to construct the GitHubActionsOrgProvisioner IAM role ARN) |
 | `AWS_POOL_OU_ID` | OU ID containing pre-staged lab accounts (provision dropdown source) |
 | `AWS_ACTIVE_OU_ID` | OU ID where assigned/active accounts live (deprovision dropdown source) |

@@ -134,7 +134,7 @@ jobs:
           url: ${{ secrets.CONJUR_URL }}
           account: ${{ secrets.CONJUR_ACCOUNT }}
           authn_id: ${{ secrets.CONJUR_AUTHN_ID }}
-          secrets: "data/vault/m-priv-svc-accts/murphys-lab-svc-mh/username|CYBERARK_CLIENT_ID;data/vault/m-priv-svc-accts/murphys-lab-svc-mh/password|CYBERARK_CLIENT_SECRET"
+          secrets: "${{ secrets.SCA_SERVICE_ACCT_USERNAME_PATH }}|CYBERARK_CLIENT_ID;${{ secrets.SCA_SERVICE_ACCT_PASSWORD_PATH }}|CYBERARK_CLIENT_SECRET"
 
       - name: Terraform Destroy (SCA Policies)
         if: steps.find_sca_state.outputs.found == 'true'
