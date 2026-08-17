@@ -352,6 +352,67 @@ jobs:
           authn_id: ${{ secrets.CONJUR_AUTHN_ID }}
           secrets: "${{ secrets.SCA_SERVICE_ACCT_USERNAME_PATH }}|CYBERARK_CLIENT_ID;${{ secrets.SCA_SERVICE_ACCT_PASSWORD_PATH }}|CYBERARK_CLIENT_SECRET"
 
+      - name: Debug - Verify Conjur secret fetch
+        env:
+          CONJUR_URL: ${{ secrets.CONJUR_URL }}
+          CONJUR_ACCOUNT: ${{ secrets.CONJUR_ACCOUNT }}
+          CONJUR_AUTHN_ID: ${{ secrets.CONJUR_AUTHN_ID }}
+          USERNAME_PATH: ${{ secrets.SCA_SERVICE_ACCT_USERNAME_PATH }}
+          PASSWORD_PATH: ${{ secrets.SCA_SERVICE_ACCT_PASSWORD_PATH }}
+        run: |
+          echo "=== Checking conjur-action output ==="
+          echo "CYBERARK_CLIENT_ID length: ${#CYBERARK_CLIENT_ID}"
+          echo "CYBERARK_CLIENT_SECRET length: ${#CYBERARK_CLIENT_SECRET}"
+
+          if [ "${#CYBERARK_CLIENT_ID}" -gt 0 ] && [ "${#CYBERARK_CLIENT_SECRET}" -gt 0 ]; then
+            echo "✅ Both secrets fetched by conjur-action — proceeding"
+            exit 0
+          fi
+
+          echo ""
+          echo "=== conjur-action returned empty values — running manual Conjur fetch for diagnostics ==="
+
+          # Get GitHub OIDC JWT
+          JWT=$(curl -sS \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=conjur" | jq -r '.value')
+          echo "OIDC JWT obtained: $([ -n "$JWT" ] && echo "yes (${#JWT} chars)" || echo "NO — empty")"
+
+          # Authenticate to Conjur
+          AUTH_HTTP=$(curl -sS -w "\nHTTP_STATUS:%{http_code}" \
+            -X POST \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            --data-urlencode "jwt=$JWT" \
+            "$CONJUR_URL/authn-jwt/$CONJUR_AUTHN_ID/$CONJUR_ACCOUNT/authenticate")
+          AUTH_STATUS=$(echo "$AUTH_HTTP" | grep "HTTP_STATUS" | cut -d: -f2)
+          AUTH_BODY=$(echo "$AUTH_HTTP" | grep -v "HTTP_STATUS")
+          echo "Conjur auth HTTP status: $AUTH_STATUS"
+
+          if [ "$AUTH_STATUS" != "200" ]; then
+            echo "❌ Conjur authentication failed:"
+            echo "$AUTH_BODY"
+            exit 1
+          fi
+
+          CONJUR_TOKEN=$(echo -n "$AUTH_BODY" | base64 | tr -d '\n')
+
+          # Fetch username path
+          PATH_ENC=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=''))" "$USERNAME_PATH")
+          FETCH_HTTP=$(curl -sS -w "\nHTTP_STATUS:%{http_code}" \
+            -H "Authorization: Token token=\"$CONJUR_TOKEN\"" \
+            "$CONJUR_URL/secrets/$CONJUR_ACCOUNT/variable/$PATH_ENC")
+          FETCH_STATUS=$(echo "$FETCH_HTTP" | grep "HTTP_STATUS" | cut -d: -f2)
+          FETCH_BODY=$(echo "$FETCH_HTTP" | grep -v "HTTP_STATUS")
+          echo "Username path fetch HTTP status: $FETCH_STATUS"
+          if [ "$FETCH_STATUS" = "200" ]; then
+            echo "✅ Variable exists and is readable — length: ${#FETCH_BODY} chars"
+          else
+            echo "❌ Variable fetch failed. Conjur response:"
+            echo "$FETCH_BODY"
+          fi
+
+          exit 1
+
       - name: Terraform Apply (SCA Policies)
         id: sca_apply
         working-directory: ./use-cases/cyberark-sca-policy
