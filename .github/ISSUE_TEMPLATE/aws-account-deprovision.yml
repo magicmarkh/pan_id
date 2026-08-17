@@ -24,7 +24,7 @@ body:
 
       '
     options:
-    - No accounts found — check AWS Organizations
+    - test-1 | 900360460826
   validations:
     required: true
 - type: dropdown
