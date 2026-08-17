@@ -378,16 +378,30 @@ jobs:
             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=conjur" | jq -r '.value')
           echo "OIDC JWT obtained: $([ -n "$JWT" ] && echo "yes (${#JWT} chars)" || echo "NO — empty")"
 
-          # Authenticate to Conjur (Conjur Cloud requires /api/ prefix)
-          AUTH_URL="$CONJUR_URL/api/authn-jwt/$CONJUR_AUTHN_ID/$CONJUR_ACCOUNT/authenticate"
-          echo "Auth URL (structure): <CONJUR_URL>/api/authn-jwt/<AUTHN_ID>/<ACCOUNT>/authenticate"
-          AUTH_HTTP=$(curl -sS -w "\nHTTP_STATUS:%{http_code}" \
-            -X POST \
-            -H "Content-Type: application/x-www-form-urlencoded" \
-            --data-urlencode "jwt=$JWT" \
-            "$AUTH_URL")
-          AUTH_STATUS=$(echo "$AUTH_HTTP" | grep "HTTP_STATUS" | cut -d: -f2)
-          AUTH_BODY=$(echo "$AUTH_HTTP" | grep -v "HTTP_STATUS")
+          # List configured authenticators (no auth required) to verify CONJUR_AUTHN_ID
+          echo "--- Checking configured authenticators ---"
+          curl -sS "$CONJUR_URL/api/authenticators" | jq '.' 2>/dev/null || \
+            curl -sS "$CONJUR_URL/authenticators" | jq '.' 2>/dev/null || \
+            echo "(could not list authenticators)"
+
+          # Try auth — attempt both with and without /api/ prefix
+          # (CONJUR_URL may or may not already include /api)
+          for AUTH_URL in \
+            "$CONJUR_URL/api/authn-jwt/$CONJUR_AUTHN_ID/$CONJUR_ACCOUNT/authenticate" \
+            "$CONJUR_URL/authn-jwt/$CONJUR_AUTHN_ID/$CONJUR_ACCOUNT/authenticate"; do
+
+            echo "--- Trying auth URL (structure): ${AUTH_URL//$CONJUR_URL/<CONJUR_URL>} ---"
+            AUTH_HTTP=$(curl -sS -w "\nHTTP_STATUS:%{http_code}" \
+              -X POST \
+              -H "Content-Type: application/x-www-form-urlencoded" \
+              --data-urlencode "jwt=$JWT" \
+              "$AUTH_URL")
+            AUTH_STATUS=$(echo "$AUTH_HTTP" | grep "HTTP_STATUS" | cut -d: -f2)
+            AUTH_BODY=$(echo "$AUTH_HTTP" | grep -v "HTTP_STATUS")
+            echo "HTTP status: $AUTH_STATUS"
+            [ "$AUTH_STATUS" = "200" ] && break
+            echo "Response body: $AUTH_BODY"
+          done
           echo "Conjur auth HTTP status: $AUTH_STATUS"
 
           if [ "$AUTH_STATUS" != "200" ]; then
