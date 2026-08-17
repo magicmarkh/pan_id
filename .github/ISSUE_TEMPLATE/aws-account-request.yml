@@ -38,7 +38,6 @@ body:
     options:
     - sandbox 3 | 588738594421
     - sandbox 1 | 396913732694
-    - sandbox 2 | 841162681454
   validations:
     required: false
 - type: input
