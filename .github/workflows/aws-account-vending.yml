@@ -378,11 +378,21 @@ jobs:
             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=conjur" | jq -r '.value')
           echo "OIDC JWT obtained: $([ -n "$JWT" ] && echo "yes (${#JWT} chars)" || echo "NO — empty")"
 
-          # List configured authenticators (no auth required) to verify CONJUR_AUTHN_ID
-          echo "--- Checking configured authenticators ---"
-          curl -sS "$CONJUR_URL/api/authenticators" | jq '.' 2>/dev/null || \
-            curl -sS "$CONJUR_URL/authenticators" | jq '.' 2>/dev/null || \
-            echo "(could not list authenticators)"
+          # Basic connectivity — verify CONJUR_URL resolves and is a Conjur instance
+          echo "--- Conjur base connectivity ---"
+          INFO_HTTP=$(curl -sS -w "\nHTTP_STATUS:%{http_code}" "$CONJUR_URL/api/info")
+          INFO_STATUS=$(echo "$INFO_HTTP" | grep "HTTP_STATUS" | cut -d: -f2)
+          INFO_BODY=$(echo "$INFO_HTTP" | grep -v "HTTP_STATUS")
+          echo "GET /api/info HTTP status: $INFO_STATUS"
+          echo "$INFO_BODY" | jq '{version,configuration}' 2>/dev/null || echo "$INFO_BODY"
+
+          # List configured authenticators (no auth required)
+          echo "--- Configured authenticators ---"
+          AUTH_LIST_HTTP=$(curl -sS -w "\nHTTP_STATUS:%{http_code}" "$CONJUR_URL/api/authenticators")
+          AUTH_LIST_STATUS=$(echo "$AUTH_LIST_HTTP" | grep "HTTP_STATUS" | cut -d: -f2)
+          AUTH_LIST_BODY=$(echo "$AUTH_LIST_HTTP" | grep -v "HTTP_STATUS")
+          echo "GET /api/authenticators HTTP status: $AUTH_LIST_STATUS"
+          echo "$AUTH_LIST_BODY" | jq '.' 2>/dev/null || echo "$AUTH_LIST_BODY"
 
           # Try auth — attempt both with and without /api/ prefix
           # (CONJUR_URL may or may not already include /api)
