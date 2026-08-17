@@ -37,7 +37,6 @@ body:
       '
     options:
     - test-2 | 210806259509
-    - test-3 | 422546939722
   validations:
     required: false
 - type: input
