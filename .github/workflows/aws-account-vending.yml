@@ -349,14 +349,14 @@ jobs:
         with:
           url: ${{ secrets.CONJUR_URL }}
           account: ${{ secrets.CONJUR_ACCOUNT }}
-          authn_id: ${{ secrets.CONJUR_AUTHN_ID }}
+          authn_id: ${{ secrets.CONJUR_JWT_AUTHENTICATOR_ID }}
           secrets: "${{ secrets.SCA_SERVICE_ACCT_USERNAME_PATH }}|CYBERARK_CLIENT_ID;${{ secrets.SCA_SERVICE_ACCT_PASSWORD_PATH }}|CYBERARK_CLIENT_SECRET"
 
       - name: Debug - Verify Conjur secret fetch
         env:
           CONJUR_URL: ${{ secrets.CONJUR_URL }}
           CONJUR_ACCOUNT: ${{ secrets.CONJUR_ACCOUNT }}
-          CONJUR_AUTHN_ID: ${{ secrets.CONJUR_AUTHN_ID }}
+          CONJUR_JWT_AUTHENTICATOR_ID: ${{ secrets.CONJUR_JWT_AUTHENTICATOR_ID }}
           USERNAME_PATH: ${{ secrets.SCA_SERVICE_ACCT_USERNAME_PATH }}
           PASSWORD_PATH: ${{ secrets.SCA_SERVICE_ACCT_PASSWORD_PATH }}
         run: |
@@ -391,13 +391,13 @@ jobs:
           curl -v -X POST \
             -H "Content-Type: application/x-www-form-urlencoded" \
             --data-urlencode "jwt=$JWT" \
-            "$CONJUR_URL/api/authn-jwt/$CONJUR_AUTHN_ID/$CONJUR_ACCOUNT/authenticate" 2>&1 || true
+            "$CONJUR_URL/api/authn-jwt/$CONJUR_JWT_AUTHENTICATOR_ID/$CONJUR_ACCOUNT/authenticate" 2>&1 || true
 
           # Also try without /api/ prefix in case CONJUR_URL already includes it
           curl -v -X POST \
             -H "Content-Type: application/x-www-form-urlencoded" \
             --data-urlencode "jwt=$JWT" \
-            "$CONJUR_URL/authn-jwt/$CONJUR_AUTHN_ID/$CONJUR_ACCOUNT/authenticate" 2>&1 || true
+            "$CONJUR_URL/authn-jwt/$CONJUR_JWT_AUTHENTICATOR_ID/$CONJUR_ACCOUNT/authenticate" 2>&1 || true
 
           exit 1
 

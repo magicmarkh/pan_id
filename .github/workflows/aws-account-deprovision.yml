@@ -133,7 +133,7 @@ jobs:
         with:
           url: ${{ secrets.CONJUR_URL }}
           account: ${{ secrets.CONJUR_ACCOUNT }}
-          authn_id: ${{ secrets.CONJUR_AUTHN_ID }}
+          authn_id: ${{ secrets.CONJUR_JWT_AUTHENTICATOR_ID }}
           secrets: "${{ secrets.SCA_SERVICE_ACCT_USERNAME_PATH }}|CYBERARK_CLIENT_ID;${{ secrets.SCA_SERVICE_ACCT_PASSWORD_PATH }}|CYBERARK_CLIENT_SECRET"
 
       - name: Terraform Destroy (SCA Policies)
