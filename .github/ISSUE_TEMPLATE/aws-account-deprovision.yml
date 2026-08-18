@@ -24,12 +24,7 @@ body:
 
       '
     options:
-    - sandbox 2 | 841162681454
-    - sandbox 1 | 396913732694
-    - test-3 | 422546939722
-    - test-2 | 210806259509
-    - sandbox 3 | 588738594421
-    - test-1 | 900360460826
+    - No accounts found — check AWS Organizations
   validations:
     required: true
 - type: dropdown
