@@ -350,6 +350,7 @@ jobs:
           url: ${{ secrets.CONJUR_URL }}
           account: ${{ secrets.CONJUR_ACCOUNT }}
           authn_id: ${{ secrets.CONJUR_JWT_AUTHENTICATOR_ID }}
+          audience: ${{ secrets.CONJUR_AUDIENCE }}
           secrets: "${{ secrets.SCA_SERVICE_ACCT_USERNAME_PATH }}|CYBERARK_CLIENT_ID;${{ secrets.SCA_SERVICE_ACCT_PASSWORD_PATH }}|CYBERARK_CLIENT_SECRET"
 
       - name: Debug - Verify Conjur secret fetch
@@ -357,6 +358,7 @@ jobs:
           CONJUR_URL: ${{ secrets.CONJUR_URL }}
           CONJUR_ACCOUNT: ${{ secrets.CONJUR_ACCOUNT }}
           CONJUR_JWT_AUTHENTICATOR_ID: ${{ secrets.CONJUR_JWT_AUTHENTICATOR_ID }}
+          CONJUR_AUDIENCE: ${{ secrets.CONJUR_AUDIENCE }}
           USERNAME_PATH: ${{ secrets.SCA_SERVICE_ACCT_USERNAME_PATH }}
           PASSWORD_PATH: ${{ secrets.SCA_SERVICE_ACCT_PASSWORD_PATH }}
         run: |
@@ -376,7 +378,7 @@ jobs:
           # Decode the JWT to inspect claims (header + payload, not signature)
           JWT=$(curl -sS \
             -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=conjur" | jq -r '.value')
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${CONJUR_AUDIENCE:-conjur}" | jq -r '.value')
           echo "JWT length: ${#JWT}"
           echo "JWT header:  $(echo "$JWT" | cut -d. -f1 | base64 -d 2>/dev/null || true)"
           echo "JWT payload: $(echo "$JWT" | cut -d. -f2 | base64 -d 2>/dev/null || true)"
