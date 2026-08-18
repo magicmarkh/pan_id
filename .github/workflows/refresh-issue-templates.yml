@@ -168,6 +168,7 @@ jobs:
           git add .github/ISSUE_TEMPLATE/aws-account-request.yml
           git add .github/ISSUE_TEMPLATE/aws-account-deprovision.yml
           git commit -m "chore: refresh issue template dropdowns with current AWS state"
+          git pull --rebase origin main
           git push origin HEAD
 
       - name: No changes detected
