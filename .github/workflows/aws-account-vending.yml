@@ -345,15 +345,6 @@ jobs:
           esac
 
       - name: Fetch CyberArk credentials from Conjur Cloud
-        uses: cyberark/conjur-action@v2.2.2
-        with:
-          url: ${{ secrets.CONJUR_URL }}
-          account: ${{ secrets.CONJUR_ACCOUNT }}
-          authn_id: ${{ secrets.CONJUR_JWT_AUTHENTICATOR_ID }}
-          audience: ${{ secrets.CONJUR_AUDIENCE }}
-          secrets: "${{ secrets.SCA_SERVICE_ACCT_USERNAME_PATH }}|CYBERARK_CLIENT_ID;${{ secrets.SCA_SERVICE_ACCT_PASSWORD_PATH }}|CYBERARK_CLIENT_SECRET"
-
-      - name: Debug - Verify Conjur secret fetch
         env:
           CONJUR_URL: ${{ secrets.CONJUR_URL }}
           CONJUR_ACCOUNT: ${{ secrets.CONJUR_ACCOUNT }}
@@ -362,56 +353,28 @@ jobs:
           USERNAME_PATH: ${{ secrets.SCA_SERVICE_ACCT_USERNAME_PATH }}
           PASSWORD_PATH: ${{ secrets.SCA_SERVICE_ACCT_PASSWORD_PATH }}
         run: |
-          echo "=== Checking conjur-action output ==="
-          echo "CYBERARK_CLIENT_ID length: ${#CYBERARK_CLIENT_ID}"
-          echo "CYBERARK_CLIENT_SECRET length: ${#CYBERARK_CLIENT_SECRET}"
-
-          if [ "${#CYBERARK_CLIENT_ID}" -gt 0 ] && [ "${#CYBERARK_CLIENT_SECRET}" -gt 0 ]; then
-            echo "✅ Both secrets fetched by conjur-action — proceeding"
-            exit 0
-          fi
-
-          echo ""
-          echo "=== conjur-action returned empty — running verbose Conjur diagnostics ==="
-          set -x  # print every command before executing
-
-          # Decode the JWT to inspect claims (header + payload, not signature)
           JWT=$(curl -sS \
             -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${CONJUR_AUDIENCE:-conjur}" | jq -r '.value')
-          echo "JWT length: ${#JWT}"
-          echo "JWT header:  $(echo "$JWT" | cut -d. -f1 | base64 -d 2>/dev/null || true)"
-          echo "JWT payload: $(echo "$JWT" | cut -d. -f2 | base64 -d 2>/dev/null || true)"
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${CONJUR_AUDIENCE}" | jq -r '.value')
 
-          # Base connectivity
-          curl -v "$CONJUR_URL/api/info" 2>&1 || true
-
-          # List authenticators
-          curl -v "$CONJUR_URL/api/authenticators" 2>&1 || true
-
-          # Attempt auth and capture token
-          AUTH_RESPONSE=$(curl -s -o /tmp/conjur_token.json -w "%{http_code}" \
+          CONJUR_TOKEN=$(curl -sS \
             -X POST \
             -H "Content-Type: application/x-www-form-urlencoded" \
             --data-urlencode "jwt=$JWT" \
-            "$CONJUR_URL/api/authn-jwt/$CONJUR_JWT_AUTHENTICATOR_ID/$CONJUR_ACCOUNT/authenticate")
-          echo "Auth HTTP status: $AUTH_RESPONSE"
-          echo "Auth response body: $(cat /tmp/conjur_token.json)"
+            "$CONJUR_URL/api/authn-jwt/$CONJUR_JWT_AUTHENTICATOR_ID/$CONJUR_ACCOUNT/authenticate" | base64 | tr -d '\n')
 
-          if [ "$AUTH_RESPONSE" = "200" ]; then
-            echo "✅ Authentication succeeded — testing secret retrieval"
-            CONJUR_TOKEN=$(cat /tmp/conjur_token.json | base64 | tr -d '\n')
-            echo "Fetching username secret..."
-            SECRET_STATUS=$(curl -s -o /tmp/secret_val.txt -w "%{http_code}" \
-              -H "Authorization: Token token=\"$CONJUR_TOKEN\"" \
-              "$CONJUR_URL/api/secrets/$CONJUR_ACCOUNT/variable/$USERNAME_PATH")
-            echo "Secret fetch HTTP status: $SECRET_STATUS"
-            echo "Secret fetch response: $(cat /tmp/secret_val.txt)"
-          else
-            echo "❌ Authentication failed with HTTP $AUTH_RESPONSE"
-          fi
+          CLIENT_ID=$(curl -sS \
+            -H "Authorization: Token token=\"$CONJUR_TOKEN\"" \
+            "$CONJUR_URL/api/secrets/$CONJUR_ACCOUNT/variable/$USERNAME_PATH")
 
-          exit 1
+          CLIENT_SECRET=$(curl -sS \
+            -H "Authorization: Token token=\"$CONJUR_TOKEN\"" \
+            "$CONJUR_URL/api/secrets/$CONJUR_ACCOUNT/variable/$PASSWORD_PATH")
+
+          echo "::add-mask::$CLIENT_ID"
+          echo "::add-mask::$CLIENT_SECRET"
+          echo "CYBERARK_CLIENT_ID=$CLIENT_ID" >> $GITHUB_ENV
+          echo "CYBERARK_CLIENT_SECRET=$CLIENT_SECRET" >> $GITHUB_ENV
 
       - name: Terraform Apply (SCA Policies)
         id: sca_apply

@@ -129,13 +129,36 @@ jobs:
 
       - name: Fetch CyberArk credentials from Conjur Cloud
         if: steps.find_sca_state.outputs.found == 'true'
-        uses: cyberark/conjur-action@v2.2.2
-        with:
-          url: ${{ secrets.CONJUR_URL }}
-          account: ${{ secrets.CONJUR_ACCOUNT }}
-          authn_id: ${{ secrets.CONJUR_JWT_AUTHENTICATOR_ID }}
-          audience: ${{ secrets.CONJUR_AUDIENCE }}
-          secrets: "${{ secrets.SCA_SERVICE_ACCT_USERNAME_PATH }}|CYBERARK_CLIENT_ID;${{ secrets.SCA_SERVICE_ACCT_PASSWORD_PATH }}|CYBERARK_CLIENT_SECRET"
+        env:
+          CONJUR_URL: ${{ secrets.CONJUR_URL }}
+          CONJUR_ACCOUNT: ${{ secrets.CONJUR_ACCOUNT }}
+          CONJUR_JWT_AUTHENTICATOR_ID: ${{ secrets.CONJUR_JWT_AUTHENTICATOR_ID }}
+          CONJUR_AUDIENCE: ${{ secrets.CONJUR_AUDIENCE }}
+          USERNAME_PATH: ${{ secrets.SCA_SERVICE_ACCT_USERNAME_PATH }}
+          PASSWORD_PATH: ${{ secrets.SCA_SERVICE_ACCT_PASSWORD_PATH }}
+        run: |
+          JWT=$(curl -sS \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${CONJUR_AUDIENCE}" | jq -r '.value')
+
+          CONJUR_TOKEN=$(curl -sS \
+            -X POST \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            --data-urlencode "jwt=$JWT" \
+            "$CONJUR_URL/api/authn-jwt/$CONJUR_JWT_AUTHENTICATOR_ID/$CONJUR_ACCOUNT/authenticate" | base64 | tr -d '\n')
+
+          CLIENT_ID=$(curl -sS \
+            -H "Authorization: Token token=\"$CONJUR_TOKEN\"" \
+            "$CONJUR_URL/api/secrets/$CONJUR_ACCOUNT/variable/$USERNAME_PATH")
+
+          CLIENT_SECRET=$(curl -sS \
+            -H "Authorization: Token token=\"$CONJUR_TOKEN\"" \
+            "$CONJUR_URL/api/secrets/$CONJUR_ACCOUNT/variable/$PASSWORD_PATH")
+
+          echo "::add-mask::$CLIENT_ID"
+          echo "::add-mask::$CLIENT_SECRET"
+          echo "CYBERARK_CLIENT_ID=$CLIENT_ID" >> $GITHUB_ENV
+          echo "CYBERARK_CLIENT_SECRET=$CLIENT_SECRET" >> $GITHUB_ENV
 
       - name: Terraform Destroy (SCA Policies)
         if: steps.find_sca_state.outputs.found == 'true'
