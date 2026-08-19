@@ -312,20 +312,20 @@ jobs:
           terraform_version: "1.14.9"
 
       - name: Terraform Init (SCA Policies)
-        working-directory: ./use-cases/cyberark-sca-policy
+        working-directory: ./use-cases/idira-sca-policy
         run: terraform init
 
-      - name: Validate CyberArk tenant reachability
+      - name: Validate Idira tenant reachability
         env:
-          SUBDOMAIN: ${{ secrets.CYBERARK_SUBDOMAIN }}
+          SUBDOMAIN: ${{ secrets.IDIRA_SUBDOMAIN }}
         run: |
           if [ -z "$SUBDOMAIN" ]; then
-            echo "❌ CYBERARK_SUBDOMAIN secret is empty"
+            echo "❌ IDIRA_SUBDOMAIN secret is empty"
             exit 1
           fi
           case "$SUBDOMAIN" in
             http://*|https://*|*.*|*" "*|*$'\t'*|*$'\n'*|*$'\r'*)
-              echo "❌ CYBERARK_SUBDOMAIN must be just the tenant prefix (e.g. 'abc1234'), no scheme/dots/whitespace"
+              echo "❌ IDIRA_SUBDOMAIN must be just the tenant prefix (e.g. 'murphyslab'), no scheme/dots/whitespace"
               exit 1 ;;
           esac
 
@@ -333,9 +333,9 @@ jobs:
             "https://platform-discovery.cyberark.cloud/api/v2/services/subdomain/${SUBDOMAIN}")
           echo "Platform discovery HTTP status: $HTTP_CODE"
           case "$HTTP_CODE" in
-            200) echo "✅ ISP tenant resolves via platform discovery" ;;
+            200) echo "✅ Idira tenant resolves via platform discovery" ;;
             404)
-              echo "❌ 404 — CYBERARK_SUBDOMAIN does not match an ISP tenant subdomain."
+              echo "❌ 404 — IDIRA_SUBDOMAIN does not match an Idira tenant subdomain."
               echo "   This must be the ISP tenant *subdomain name* (the prefix of"
               echo "   <subdomain>.cyberark.cloud), not the underlying Identity tenant ID."
               exit 1 ;;
@@ -344,54 +344,54 @@ jobs:
               exit 1 ;;
           esac
 
-      - name: Fetch CyberArk credentials from Conjur Cloud
+      - name: Fetch Idira credentials from Secrets Manager SaaS
         env:
-          CONJUR_URL: ${{ secrets.CONJUR_URL }}
-          CONJUR_ACCOUNT: ${{ secrets.CONJUR_ACCOUNT }}
-          CONJUR_JWT_AUTHENTICATOR_ID: ${{ secrets.CONJUR_JWT_AUTHENTICATOR_ID }}
-          CONJUR_AUDIENCE: ${{ secrets.CONJUR_AUDIENCE }}
+          SECRETSMGR_URL: ${{ secrets.SECRETSMGR_URL }}
+          SECRETSMGR_ACCOUNT: ${{ secrets.SECRETSMGR_ACCOUNT }}
+          SECRETSMGR_JWT_AUTHENTICATOR_ID: ${{ secrets.SECRETSMGR_JWT_AUTHENTICATOR_ID }}
+          SECRETSMGR_AUDIENCE: ${{ secrets.SECRETSMGR_AUDIENCE }}
           USERNAME_PATH: ${{ secrets.SCA_SERVICE_ACCT_USERNAME_PATH }}
           PASSWORD_PATH: ${{ secrets.SCA_SERVICE_ACCT_PASSWORD_PATH }}
         run: |
           JWT=$(curl -sS \
             -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${CONJUR_AUDIENCE}" | jq -r '.value')
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${SECRETSMGR_AUDIENCE}" | jq -r '.value')
 
-          CONJUR_TOKEN=$(curl -sS \
+          SECRETSMGR_TOKEN=$(curl -sS \
             -X POST \
             -H "Content-Type: application/x-www-form-urlencoded" \
             --data-urlencode "jwt=$JWT" \
-            "$CONJUR_URL/api/authn-jwt/$CONJUR_JWT_AUTHENTICATOR_ID/$CONJUR_ACCOUNT/authenticate" | base64 | tr -d '\n')
+            "$SECRETSMGR_URL/api/authn-jwt/$SECRETSMGR_JWT_AUTHENTICATOR_ID/$SECRETSMGR_ACCOUNT/authenticate" | base64 | tr -d '\n')
 
           CLIENT_ID=$(curl -sS \
-            -H "Authorization: Token token=\"$CONJUR_TOKEN\"" \
-            "$CONJUR_URL/api/secrets/$CONJUR_ACCOUNT/variable/$USERNAME_PATH")
+            -H "Authorization: Token token=\"$SECRETSMGR_TOKEN\"" \
+            "$SECRETSMGR_URL/api/secrets/$SECRETSMGR_ACCOUNT/variable/$USERNAME_PATH")
 
           CLIENT_SECRET=$(curl -sS \
-            -H "Authorization: Token token=\"$CONJUR_TOKEN\"" \
-            "$CONJUR_URL/api/secrets/$CONJUR_ACCOUNT/variable/$PASSWORD_PATH")
+            -H "Authorization: Token token=\"$SECRETSMGR_TOKEN\"" \
+            "$SECRETSMGR_URL/api/secrets/$SECRETSMGR_ACCOUNT/variable/$PASSWORD_PATH")
 
           echo "::add-mask::$CLIENT_ID"
           echo "::add-mask::$CLIENT_SECRET"
-          echo "CYBERARK_CLIENT_ID=$CLIENT_ID" >> $GITHUB_ENV
-          echo "CYBERARK_CLIENT_SECRET=$CLIENT_SECRET" >> $GITHUB_ENV
+          echo "IDIRA_CLIENT_ID=$CLIENT_ID" >> $GITHUB_ENV
+          echo "IDIRA_CLIENT_SECRET=$CLIENT_SECRET" >> $GITHUB_ENV
 
       - name: Terraform Apply (SCA Policies)
         id: sca_apply
-        working-directory: ./use-cases/cyberark-sca-policy
+        working-directory: ./use-cases/idira-sca-policy
         env:
-          TF_VAR_cyberark_subdomain: ${{ secrets.CYBERARK_SUBDOMAIN }}
-          TF_VAR_cyberark_client_id: ${{ env.CYBERARK_CLIENT_ID }}
-          TF_VAR_cyberark_client_secret: ${{ env.CYBERARK_CLIENT_SECRET }}
+          TF_VAR_idira_subdomain: ${{ secrets.IDIRA_SUBDOMAIN }}
+          TF_VAR_idira_client_id: ${{ env.IDIRA_CLIENT_ID }}
+          TF_VAR_idira_client_secret: ${{ env.IDIRA_CLIENT_SECRET }}
           TF_VAR_account_id: ${{ needs.provision-account.outputs.account_id }}
           TF_VAR_account_name: ${{ needs.parse-request.outputs.account_name }}
           TF_VAR_org_management_account_id: ${{ secrets.AWS_MANAGEMENT_ACCOUNT_ID }}
-          TF_VAR_power_user_role_name: ${{ secrets.CYBERARK_POWERUSER_ROLE }}
+          TF_VAR_power_user_role_name: ${{ secrets.IDIRA_POWERUSER_ROLE }}
           TF_VAR_power_user_permission_set_arn: ${{ secrets.SCA_POWER_USER_PERMISSION_SET_ARN }}
           TF_VAR_audit_permission_set_arn: ${{ secrets.SCA_AUDIT_PERMISSION_SET_ARN }}
           TF_VAR_cloudops_permission_set_arn: ${{ secrets.SCA_CLOUDOPS_PERMISSION_SET_ARN }}
-          TF_VAR_audit_role_name: ${{ secrets.CYBERARK_AUDITOR_ROLE }}
-          TF_VAR_cloudops_role_name: ${{ secrets.CYBERARK_CLOUDOPS_ROLE }}
+          TF_VAR_audit_role_name: ${{ secrets.IDIRA_AUDITOR_ROLE }}
+          TF_VAR_cloudops_role_name: ${{ secrets.IDIRA_CLOUDOPS_ROLE }}
         run: terraform apply -auto-approve -no-color
 
       - name: Upload SCA Terraform state
@@ -399,7 +399,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: sca-tfstate-${{ needs.provision-account.outputs.account_id }}
-          path: ./use-cases/cyberark-sca-policy/terraform.tfstate
+          path: ./use-cases/idira-sca-policy/terraform.tfstate
           retention-days: 90
           if-no-files-found: error
 
@@ -413,17 +413,17 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `### 🔐 CyberArk SCA Policies Applied
+              body: `### 🔐 Idira SCA Policies Applied
 
-              Access policies have been created in CyberArk Identity for account \`${{ needs.provision-account.outputs.account_id }}\`:
+              Access policies have been created in Idira Identity for account \`${{ needs.provision-account.outputs.account_id }}\`:
 
               | Policy | Principal |
               |---|---|
-              | **PowerUser** | ${{ secrets.CYBERARK_POWERUSER_ROLE }} (role) |
-              | **Audit** | ${{ secrets.CYBERARK_AUDITOR_ROLE }} (role) |
-              | **CloudOps** | ${{ secrets.CYBERARK_CLOUDOPS_ROLE }} (role) |
+              | **PowerUser** | ${{ secrets.IDIRA_POWERUSER_ROLE }} (role) |
+              | **Audit** | ${{ secrets.IDIRA_AUDITOR_ROLE }} (role) |
+              | **CloudOps** | ${{ secrets.IDIRA_CLOUDOPS_ROLE }} (role) |
 
-              Access is available via CyberArk Secure Cloud Access. Sessions limited to 1 hour, Mon–Fri 08:00–18:00 UTC.`
+              Access is available via Idira Secure Cloud Access. Sessions limited to 1 hour, Mon–Fri 08:00–18:00 UTC.`
             });
 
             await github.rest.issues.update({
@@ -459,10 +459,10 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `### ⚠️ CyberArk SCA Policy Creation Failed
+              body: `### ⚠️ Idira SCA Policy Creation Failed
 
-              Account provisioning succeeded, but CyberArk Secure Cloud Access policies could not be applied.
-              Access to the account will not be available via CyberArk until this is resolved.
+              Account provisioning succeeded, but Idira Secure Cloud Access policies could not be applied.
+              Access to the account will not be available via Idira until this is resolved.
 
               [View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`
             });

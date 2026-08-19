@@ -112,7 +112,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: sca-tfstate-${{ matrix.account.id }}
-          path: ./use-cases/cyberark-sca-policy
+          path: ./use-cases/idira-sca-policy
           run-id: ${{ steps.find_sca_state.outputs.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -124,58 +124,58 @@ jobs:
 
       - name: Terraform Init (SCA Policies)
         if: steps.find_sca_state.outputs.found == 'true'
-        working-directory: ./use-cases/cyberark-sca-policy
+        working-directory: ./use-cases/idira-sca-policy
         run: terraform init
 
-      - name: Fetch CyberArk credentials from Conjur Cloud
+      - name: Fetch Idira credentials from Secrets Manager SaaS
         if: steps.find_sca_state.outputs.found == 'true'
         env:
-          CONJUR_URL: ${{ secrets.CONJUR_URL }}
-          CONJUR_ACCOUNT: ${{ secrets.CONJUR_ACCOUNT }}
-          CONJUR_JWT_AUTHENTICATOR_ID: ${{ secrets.CONJUR_JWT_AUTHENTICATOR_ID }}
-          CONJUR_AUDIENCE: ${{ secrets.CONJUR_AUDIENCE }}
+          SECRETSMGR_URL: ${{ secrets.SECRETSMGR_URL }}
+          SECRETSMGR_ACCOUNT: ${{ secrets.SECRETSMGR_ACCOUNT }}
+          SECRETSMGR_JWT_AUTHENTICATOR_ID: ${{ secrets.SECRETSMGR_JWT_AUTHENTICATOR_ID }}
+          SECRETSMGR_AUDIENCE: ${{ secrets.SECRETSMGR_AUDIENCE }}
           USERNAME_PATH: ${{ secrets.SCA_SERVICE_ACCT_USERNAME_PATH }}
           PASSWORD_PATH: ${{ secrets.SCA_SERVICE_ACCT_PASSWORD_PATH }}
         run: |
           JWT=$(curl -sS \
             -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${CONJUR_AUDIENCE}" | jq -r '.value')
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${SECRETSMGR_AUDIENCE}" | jq -r '.value')
 
-          CONJUR_TOKEN=$(curl -sS \
+          SECRETSMGR_TOKEN=$(curl -sS \
             -X POST \
             -H "Content-Type: application/x-www-form-urlencoded" \
             --data-urlencode "jwt=$JWT" \
-            "$CONJUR_URL/api/authn-jwt/$CONJUR_JWT_AUTHENTICATOR_ID/$CONJUR_ACCOUNT/authenticate" | base64 | tr -d '\n')
+            "$SECRETSMGR_URL/api/authn-jwt/$SECRETSMGR_JWT_AUTHENTICATOR_ID/$SECRETSMGR_ACCOUNT/authenticate" | base64 | tr -d '\n')
 
           CLIENT_ID=$(curl -sS \
-            -H "Authorization: Token token=\"$CONJUR_TOKEN\"" \
-            "$CONJUR_URL/api/secrets/$CONJUR_ACCOUNT/variable/$USERNAME_PATH")
+            -H "Authorization: Token token=\"$SECRETSMGR_TOKEN\"" \
+            "$SECRETSMGR_URL/api/secrets/$SECRETSMGR_ACCOUNT/variable/$USERNAME_PATH")
 
           CLIENT_SECRET=$(curl -sS \
-            -H "Authorization: Token token=\"$CONJUR_TOKEN\"" \
-            "$CONJUR_URL/api/secrets/$CONJUR_ACCOUNT/variable/$PASSWORD_PATH")
+            -H "Authorization: Token token=\"$SECRETSMGR_TOKEN\"" \
+            "$SECRETSMGR_URL/api/secrets/$SECRETSMGR_ACCOUNT/variable/$PASSWORD_PATH")
 
           echo "::add-mask::$CLIENT_ID"
           echo "::add-mask::$CLIENT_SECRET"
-          echo "CYBERARK_CLIENT_ID=$CLIENT_ID" >> $GITHUB_ENV
-          echo "CYBERARK_CLIENT_SECRET=$CLIENT_SECRET" >> $GITHUB_ENV
+          echo "IDIRA_CLIENT_ID=$CLIENT_ID" >> $GITHUB_ENV
+          echo "IDIRA_CLIENT_SECRET=$CLIENT_SECRET" >> $GITHUB_ENV
 
       - name: Terraform Destroy (SCA Policies)
         if: steps.find_sca_state.outputs.found == 'true'
-        working-directory: ./use-cases/cyberark-sca-policy
+        working-directory: ./use-cases/idira-sca-policy
         env:
-          TF_VAR_cyberark_subdomain: ${{ secrets.CYBERARK_SUBDOMAIN }}
-          TF_VAR_cyberark_client_id: ${{ env.CYBERARK_CLIENT_ID }}
-          TF_VAR_cyberark_client_secret: ${{ env.CYBERARK_CLIENT_SECRET }}
+          TF_VAR_idira_subdomain: ${{ secrets.IDIRA_SUBDOMAIN }}
+          TF_VAR_idira_client_id: ${{ env.IDIRA_CLIENT_ID }}
+          TF_VAR_idira_client_secret: ${{ env.IDIRA_CLIENT_SECRET }}
           TF_VAR_account_id: ${{ matrix.account.id }}
           TF_VAR_account_name: ${{ matrix.account.name }}
           TF_VAR_org_management_account_id: ${{ secrets.AWS_MANAGEMENT_ACCOUNT_ID }}
-          TF_VAR_power_user_role_name: ${{ secrets.CYBERARK_POWERUSER_ROLE }}
+          TF_VAR_power_user_role_name: ${{ secrets.IDIRA_POWERUSER_ROLE }}
           TF_VAR_power_user_permission_set_arn: ${{ secrets.SCA_POWER_USER_PERMISSION_SET_ARN }}
           TF_VAR_audit_permission_set_arn: ${{ secrets.SCA_AUDIT_PERMISSION_SET_ARN }}
           TF_VAR_cloudops_permission_set_arn: ${{ secrets.SCA_CLOUDOPS_PERMISSION_SET_ARN }}
-          TF_VAR_audit_role_name: ${{ secrets.CYBERARK_AUDITOR_ROLE }}
-          TF_VAR_cloudops_role_name: ${{ secrets.CYBERARK_CLOUDOPS_ROLE }}
+          TF_VAR_audit_role_name: ${{ secrets.IDIRA_AUDITOR_ROLE }}
+          TF_VAR_cloudops_role_name: ${{ secrets.IDIRA_CLOUDOPS_ROLE }}
         run: terraform destroy -auto-approve -no-color
 
       - name: No SCA state found

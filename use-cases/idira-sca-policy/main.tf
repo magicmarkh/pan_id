@@ -11,13 +11,13 @@ terraform {
 
 provider "idsec" {
   auth_method   = "identity_service_user"
-  service_user  = var.cyberark_client_id
-  service_token = var.cyberark_client_secret
-  subdomain     = var.cyberark_subdomain
+  service_user  = var.idira_client_id
+  service_token = var.idira_client_secret
+  subdomain     = var.idira_subdomain
 }
 
-module "cyberark_policy" {
-  source = "../../modules/cyberark-policy"
+module "idira_policy" {
+  source = "../../modules/idira-policy"
 
   account_id                    = var.account_id
   account_name                  = var.account_name

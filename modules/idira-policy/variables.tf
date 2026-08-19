@@ -14,7 +14,7 @@ variable "org_management_account_id" {
 }
 
 variable "power_user_role_name" {
-  description = "CyberArk Identity role name for power user access"
+  description = "Idira Identity role name for power user access"
   type        = string
 }
 
@@ -34,12 +34,12 @@ variable "cloudops_permission_set_arn" {
 }
 
 variable "audit_role_name" {
-  description = "CyberArk Identity role name for auditors"
+  description = "Idira Identity role name for auditors"
   type        = string
 }
 
 variable "cloudops_role_name" {
-  description = "CyberArk Identity role name for cloud ops"
+  description = "Idira Identity role name for cloud ops"
   type        = string
 }
 
@@ -66,4 +66,3 @@ variable "access_window_to_hour" {
   type        = string
   default     = "18:00:00"
 }
-

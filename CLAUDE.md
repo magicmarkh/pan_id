@@ -1,7 +1,7 @@
-# Project: pan_id — CyberArk Identity Scaling Demos
+# Project: pan_id — Idira Identity Scaling Demos
 
 ## What This Repo Is
-Closed-loop automation demo repository using CyberArk Identity (idsec Terraform provider),
+Closed-loop automation demo repository using Idira Identity (idsec Terraform provider),
 GitHub Actions, and Terraform. Use cases are modular and composable — designed so individual
 demos can be stitched together to add capability incrementally.
 
@@ -9,7 +9,7 @@ demos can be stitched together to add capability incrementally.
 ```
 GitHub Issue Form → GitHub Actions → [production gate: human approval]
   → AWS Organizations (OIDC) → account assigned/created
-  → CyberArk Identity (idsec provider, OAuth2) → SCA policies created
+  → Idira Identity (idsec provider, OAuth2) → SCA policies created
       → Comment on Issue → Close Issue → Refresh Issue Templates
 ```
 
@@ -17,7 +17,7 @@ Deprovisioning is the full reverse and supports multiple accounts in one issue:
 ```
 GitHub Issue Form (multi-select) → GitHub Actions → [production gate]
   → Matrix job per account (parallel, fail-fast: false):
-       CyberArk Identity → SCA policies destroyed (terraform destroy)
+       Idira Identity → SCA policies destroyed (terraform destroy)
        AWS Organizations → account returned to pool
   → Notify job: single summary comment → Close Issue → Refresh Issue Templates
 ```
@@ -32,12 +32,12 @@ GitHub Issue Form (multi-select) → GitHub Actions → [production gate]
   - **Simulate** — assigns a pre-staged pool account (fast, recommended for demos)
   - **Create** — provisions a real new AWS Organizations account via Terraform
 
-### 2. CyberArk SCA Policies (`use-cases/cyberark-sca-policy/`)
+### 2. Idira SCA Policies (`use-cases/idira-sca-policy/`)
 - **Not triggered directly** — invoked by the vending and deprovisioning workflows
 - Creates three `idsec_policy_cloud_access` resources per account, all using ROLE principals:
-  - `PowerUser` — `CYBERARK_POWERUSER_ROLE` role, targets PowerUser permission set
-  - `Audit` — `CYBERARK_AUDITOR_ROLE` role, targets Audit permission set
-  - `CloudOps` — `CYBERARK_CLOUDOPS_ROLE` role, targets CloudOps permission set
+  - `PowerUser` — `IDIRA_POWERUSER_ROLE` role, targets PowerUser permission set
+  - `Audit` — `IDIRA_AUDITOR_ROLE` role, targets Audit permission set
+  - `CloudOps` — `IDIRA_CLOUDOPS_ROLE` role, targets CloudOps permission set
 - All policies: `Recurring`, Mon-Fri 08:00–18:00 UTC, 1 hour max session
 - Terraform state stored as GitHub Actions artifact `sca-tfstate-{account_id}` (90 days)
 
@@ -58,9 +58,10 @@ GitHub Issue Form (multi-select) → GitHub Actions → [production gate]
 - Vending and deprovision workflows also call `createWorkflowDispatch` on success for immediate refresh
 
 ## Key Design Decisions (Already Made — Do Not Revisit Unless Asked)
-- **CyberArk SCA auth:** OAuth2 confidential client (`service_user` / `service_token`) via idsec Terraform provider; tenant identified by `subdomain` only (not full URL). The `subdomain` value must be the ISP tenant *name* (prefix of `<name>.cyberark.cloud`), NOT the underlying Identity tenant ID (prefix of `<id>.id.cyberark.cloud`). The provider resolves all service endpoints via `platform-discovery.cyberark.cloud/api/v2/services/subdomain/<name>`.
-- **SCA policy principals:** All three policies (PowerUser, Audit, CloudOps) use ROLE principals (type=ROLE in the idsec API). CyberArk Identity's role-based access construct is what SCA expects — what looks like a "Group" in the admin UI is exposed as a Role in the SCA API. Per-user (USER) principals were dropped because GitHub usernames are not federated with the CyberArk Identity tenant. Add demo users to the relevant CyberArk Identity roles instead of federating.
-- **CyberArk OAuth2 credential flow:** GitHub OIDC JWT → Conjur Cloud (`cyberark/conjur-action@v2.2.2`, `authn-jwt` authenticator) → `CYBERARK_CLIENT_ID` + `CYBERARK_CLIENT_SECRET` fetched at runtime into `TF_VAR_*` env vars. Conjur variable paths: `data/vault/m-priv-svc-accts/murphys-lab-svc-mh/username` (client ID) and `.../password` (client secret). Static GitHub secrets `CYBERARK_CLIENT_ID` / `CYBERARK_CLIENT_SECRET` have been removed; replaced by `CONJUR_URL`, `CONJUR_ACCOUNT`, `CONJUR_JWT_AUTHENTICATOR_ID`.
+- **Idira SCA auth:** OAuth2 confidential client (`service_user` / `service_token`) via idsec Terraform provider; tenant identified by `subdomain` only (not full URL). The `subdomain` value must be the ISP tenant *name* (prefix of `<name>.cyberark.cloud`), NOT the underlying Identity tenant ID (prefix of `<id>.id.cyberark.cloud`). The provider resolves all service endpoints via `platform-discovery.cyberark.cloud/api/v2/services/subdomain/<name>`.
+- **SCA policy principals:** All three policies (PowerUser, Audit, CloudOps) use ROLE principals (type=ROLE in the idsec API). Idira Identity's role-based access construct is what SCA expects — what looks like a "Group" in the admin UI is exposed as a Role in the SCA API. Per-user (USER) principals were dropped because GitHub usernames are not federated with the Idira Identity tenant. Add demo users to the relevant Idira Identity roles instead of federating.
+- **Idira OAuth2 credential flow:** GitHub OIDC JWT → Secrets Manager SaaS (`authn-jwt` authenticator, custom curl-based bash step) → `IDIRA_CLIENT_ID` + `IDIRA_CLIENT_SECRET` fetched at runtime into `TF_VAR_*` env vars. Secrets Manager variable paths: `data/vault/<safe>/<account>/username` (client ID) and `.../password` (client secret). The `cyberark/conjur-action` Docker action was abandoned — it silently produced empty credentials due to a positional argument bug. Static GitHub secrets for client ID/secret are not used; credentials are always fetched at runtime from Secrets Manager SaaS via JWT auth.
+- **Secrets Manager SaaS JWT auth:** GitHub OIDC JWT → `POST /api/authn-jwt/<authenticator-id>/<account>/authenticate` → base64-encoded token → `GET /api/secrets/<account>/variable/<path>`. Host identity resolved via `identity_path` + `token_app_property` JWT claim. Host annotation `authn-jwt/<service-id>/repository_id` must match the numeric GitHub repository ID (not the string name).
 - **AWS credential flow:** GitHub OIDC → `GitHubActionsOrgProvisioner` IAM role — no static AWS keys
 - **Approval gate:** GitHub Environments (`environment: production`) on every destructive job
 - **Issue parsing:** `stefanbuck/github-issue-parser@v3` maps issue form fields to job outputs
@@ -86,11 +87,11 @@ pan_id/
 │       ├── aws-account-deprovision.yml   # Deprovision pipeline (parse + matrix + notify)
 │       └── refresh-issue-templates.yml   # Dropdown refresh (daily, dispatch, workflow_run)
 ├── modules/
-│   ├── cyberark-policy/    # idsec_policy_cloud_access × 3 (poweruser, audit, cloudops)
+│   ├── idira-policy/       # idsec_policy_cloud_access × 3 (poweruser, audit, cloudops)
 │   └── aws-account/        # aws_organizations_account resource
 ├── use-cases/
 │   ├── aws-account-vending/     # Create mode: Terraform for real AWS account creation
-│   └── cyberark-sca-policy/     # SCA policies: idsec provider only, no AWS
+│   └── idira-sca-policy/        # SCA policies: idsec provider only, no AWS
 ├── CLAUDE.md
 └── README.md
 ```
@@ -98,23 +99,22 @@ pan_id/
 ## GitHub Secrets Required
 | Secret | Description |
 |---|---|
-| `CYBERARK_SUBDOMAIN` | ISP tenant subdomain **name** e.g. `murphyslab` — the prefix of `<subdomain>.cyberark.cloud`. NOT the Identity tenant ID (e.g. `abv4527`). Used by idsec provider via `platform-discovery.cyberark.cloud/api/v2/services/subdomain/<value>` |
-| ~~`CYBERARK_CLIENT_ID`~~ | **Removed** — now fetched from Conjur Cloud at runtime |
-| ~~`CYBERARK_CLIENT_SECRET`~~ | **Removed** — now fetched from Conjur Cloud at runtime |
-| `CONJUR_URL` | Conjur Cloud SaaS endpoint e.g. `https://<tenant>.secretsmgr.cyberark.cloud` |
-| `CONJUR_ACCOUNT` | Conjur account name — typically `conjur` for Conjur Cloud |
-| `CONJUR_JWT_AUTHENTICATOR_ID` | JWT authenticator service ID configured in Conjur policy (e.g. `github`) |
-| `SCA_SERVICE_ACCT_USERNAME_PATH` | Conjur variable path for the idsec service user client ID e.g. `data/vault/<safe>/<account>/username` |
-| `SCA_SERVICE_ACCT_PASSWORD_PATH` | Conjur variable path for the idsec service user client secret e.g. `data/vault/<safe>/<account>/password` |
+| `IDIRA_SUBDOMAIN` | ISP tenant subdomain **name** e.g. `murphyslab` — the prefix of `<subdomain>.cyberark.cloud`. NOT the Identity tenant ID (e.g. `abv4527`). Used by idsec provider via `platform-discovery.cyberark.cloud/api/v2/services/subdomain/<value>` |
+| `SECRETSMGR_URL` | Secrets Manager SaaS endpoint e.g. `https://<tenant>.secretsmgr.cyberark.cloud` |
+| `SECRETSMGR_ACCOUNT` | Secrets Manager account name — typically `conjur` |
+| `SECRETSMGR_JWT_AUTHENTICATOR_ID` | JWT authenticator service ID configured in Secrets Manager policy (e.g. `github`) |
+| `SECRETSMGR_AUDIENCE` | JWT audience value expected by the Secrets Manager JWT authenticator (e.g. `magicmarkh`) |
+| `SCA_SERVICE_ACCT_USERNAME_PATH` | Secrets Manager variable path for the idsec service user client ID e.g. `data/vault/<safe>/<account>/username` |
+| `SCA_SERVICE_ACCT_PASSWORD_PATH` | Secrets Manager variable path for the idsec service user client secret e.g. `data/vault/<safe>/<account>/password` |
 | `AWS_MANAGEMENT_ACCOUNT_ID` | 12-digit management account ID (used to construct the GitHubActionsOrgProvisioner IAM role ARN) |
 | `AWS_POOL_OU_ID` | OU ID containing pre-staged lab accounts (provision dropdown source) |
 | `AWS_ACTIVE_OU_ID` | OU ID where assigned/active accounts live (deprovision dropdown source) |
 | `SCA_POWER_USER_PERMISSION_SET_ARN` | IAM Identity Center permission set ARN for power user access |
 | `SCA_AUDIT_PERMISSION_SET_ARN` | IAM Identity Center permission set ARN for audit read-only |
 | `SCA_CLOUDOPS_PERMISSION_SET_ARN` | IAM Identity Center permission set ARN for cloud ops admin |
-| `CYBERARK_POWERUSER_ROLE` | CyberArk Identity role name for power user access — all three SCA policies use roles, not groups or individual users (CyberArk Identity exposes role-based principals as type=ROLE in the SCA API) |
-| `CYBERARK_AUDITOR_ROLE` | CyberArk Identity role name for auditors |
-| `CYBERARK_CLOUDOPS_ROLE` | CyberArk Identity role name for cloud ops |
+| `IDIRA_POWERUSER_ROLE` | Idira Identity role name for power user access — all three SCA policies use roles, not groups or individual users (Idira Identity exposes role-based principals as type=ROLE in the SCA API) |
+| `IDIRA_AUDITOR_ROLE` | Idira Identity role name for auditors |
+| `IDIRA_CLOUDOPS_ROLE` | Idira Identity role name for cloud ops |
 
 ## GitHub Environment Required
 - Environment name: `production`
@@ -143,9 +143,9 @@ The `refresh-issue-templates.yml` workflow reads these tags to populate dropdown
 4. Apply label `provision-aws-account`
 5. Approve the `production` gate
 6. Account moves from pool OU → active OU, tagged InUse
-7. CyberArk SCA policies created for PowerUser / Audit / CloudOps
+7. Idira SCA policies created for PowerUser / Audit / CloudOps
 8. Issue commented with account details + SCA policy table, then closed
-9. Demo the account (access via CyberArk Secure Cloud Access)
+9. Demo the account (access via Idira Secure Cloud Access)
 10. Open new issue → **AWS Account Deprovision Request**
 11. Select **one or more** accounts from the multi-select dropdown, apply `deprovision-aws-account`
 12. Approve the `production` gate (one approval covers all selected accounts)
@@ -168,7 +168,7 @@ The `refresh-issue-templates.yml` workflow reads these tags to populate dropdown
 - [x] Duplicate account name guard (Create mode)
 - [x] OIDC authentication to AWS — no static keys
 - [x] Human approval gate via GitHub Environments
-- [x] CyberArk SCA policies — `idsec_policy_cloud_access` for PowerUser / Audit / CloudOps, schema-aligned (Recurring, Mon-Fri 08:00-18:00 UTC, 1h sessions)
+- [x] Idira SCA policies — `idsec_policy_cloud_access` for PowerUser / Audit / CloudOps, schema-aligned (Recurring, Mon-Fri 08:00-18:00 UTC, 1h sessions)
 - [x] SCA policy state persisted as GitHub Actions artifact for deprovision
 - [x] Deprovisioning workflow with multi-account support — matrix job per account, fail-fast disabled, single summary comment
 - [x] Dynamic OU return on deprovision via `aws organizations list-parents` (no hardcoded source OU)
@@ -176,9 +176,10 @@ The `refresh-issue-templates.yml` workflow reads these tags to populate dropdown
 - [x] Auto-refresh of issue templates after every provision/deprovision (via `createWorkflowDispatch` and `workflow_run`)
 - [x] Issue lifecycle — success/failure comments on every job, issue closed on completion
 - [x] `modules/aws-account/` — `aws_organizations_account` resource
-- [x] `modules/cyberark-policy/` — three `idsec_policy_cloud_access` resources
+- [x] `modules/idira-policy/` — three `idsec_policy_cloud_access` resources
 - [x] `use-cases/aws-account-vending/` — Create mode Terraform config
-- [x] `use-cases/cyberark-sca-policy/` — SCA policy Terraform config (idsec provider only)
+- [x] `use-cases/idira-sca-policy/` — SCA policy Terraform config (idsec provider only)
+- [x] Secrets Manager SaaS JWT auth — custom curl-based step replaces `cyberark/conjur-action` (abandoned due to positional argument bug that silently produced empty credentials)
 
 ## What's NOT Built Yet (Next Phases)
 
@@ -189,8 +190,8 @@ The `refresh-issue-templates.yml` workflow reads these tags to populate dropdown
 - [ ] New module: `modules/aws-baseline-security/`
 
 ### Phase 5 — Additional Use Cases (Future)
-- [ ] User onboarding — provision CyberArk Identity user + SCA policy triggered by GitHub issue
-- [ ] Secrets rotation — trigger CyberArk secrets rotation via GitHub Actions
+- [ ] User onboarding — provision Idira Identity user + SCA policy triggered by GitHub issue
+- [ ] Secrets rotation — trigger Secrets Manager SaaS rotation via GitHub Actions
 - [ ] Cross-account access — grant an existing user access to a new account
 
 ## Coding Conventions
@@ -202,14 +203,15 @@ The `refresh-issue-templates.yml` workflow reads these tags to populate dropdown
 - Every workflow must: use `environment: production` gate on destructive steps, comment success/failure on the issue
 - Dropdown option format: `"Display Name | id-value"` — ID parsed back with `awk -F' [|] ' '{print $NF}' | tr -d ' '` (note: `' [|] '` is the safe regex form; bare `'|'` is interpreted as alternation)
 
-## CyberArk Identity Context
+## Idira Identity Context
 
 ### Provider basics
 - Provider repo: https://github.com/cyberark/terraform-provider-idsec
+- Registry: `cyberark/idsec` (Terraform registry path does not change with the rebrand)
 - Available versions: `0.1.x`–`0.2.x` only (NO `1.x` releases). Use constraint `>= 0.1.0`
 - Provider block uses `auth_method = "identity_service_user"`, `service_user`, `service_token`, `subdomain`
 
-### `idsec_policy_cloud_access` schema (verified against working policy from CyberArk SE)
+### `idsec_policy_cloud_access` schema (verified against working policy)
 
 The schema as actually accepted by the SCA API differs in several ways from the
 provider's terraform-plugin-framework JSON dump — the dump describes what's
@@ -262,13 +264,13 @@ fix), **update CLAUDE.md in the same PR**:
 - Update "GitHub Secrets Required" if new secrets are needed
 - Update "Demo Flow" if the user-facing experience changed
 - Update "Key Design Decisions" if a non-obvious choice was made
-- Add to "CyberArk Identity Context" if a new provider resource is used
+- Add to "Idira Identity Context" if a new provider resource is used
 - Bump the schema notes if a provider version with a different schema is adopted
 
 A milestone is anything worth telling future-you about. When in doubt, update.
 
 ### When the provider schema is unknown — ASK, don't guess
-The CyberArk `idsec` provider has a complex schema and is sparsely documented online.
+The `idsec` provider has a complex schema and is sparsely documented online.
 **Do not invent attribute names, types, or nested shapes from intuition.** Each guess
 costs a workflow run, an approval, and the user's time.
 
@@ -277,7 +279,7 @@ If you need to use an `idsec_*` resource you've never confirmed against the sche
 this exact instruction:
 
 > I need the schema for the `idsec_<resource>` resource. Please run the following
-> from a directory that has the provider initialized (e.g. `use-cases/cyberark-sca-policy/`):
+> from a directory that has the provider initialized (e.g. `use-cases/idira-sca-policy/`):
 >
 > ```bash
 > terraform init   # if not already initialized

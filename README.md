@@ -1,290 +1,135 @@
 # AWS Account Vending System
 
-An automated, closed-loop AWS account provisioning system using GitHub Actions, CyberArk Identity for authentication, and Terraform for infrastructure as code.
+Closed-loop AWS account provisioning demo using GitHub Actions, Idira Identity, Secrets Manager SaaS, and Terraform.
 
-## 🏗️ Architecture Overview
-
-This system provides a self-service AWS account vending machine that:
-
-1. **Request Phase**: Users submit AWS account requests via GitHub issues using a structured form
-2. **Authentication Phase**: CyberArk Identity provides OAuth2-based authentication and authorization
-3. **Approval Phase**: Production environment gate requires manual approval before provisioning
-4. **Provisioning Phase**: Terraform creates and configures the AWS account with baseline security settings
-5. **Feedback Phase**: Results are posted back to the GitHub issue, which is automatically closed on success
+## Architecture
 
 ```
-┌─────────────────┐
-│  GitHub Issue   │
-│  (Request Form) │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Label Applied:  │
-│ provision-aws-  │
-│    account      │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ GitHub Actions  │
-│   Triggered     │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  Parse Issue    │
-│     Form        │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│   CyberArk      │
-│ Authentication  │
-│  (OAuth2)       │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│   Production    │
-│ Approval Gate   │
-│  (Required)     │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│   Terraform     │
-│ Init/Plan/Apply │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  AWS Account    │
-│   Provisioned   │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Update Issue    │
-│  Close Issue    │
-└─────────────────┘
+GitHub Issue Form → Label Applied → GitHub Actions
+  → Parse Issue → Production Approval Gate
+  → AWS Organizations (OIDC) → Account assigned/created
+  → Idira Identity (idsec provider) → SCA policies created
+  → Comment on Issue → Close Issue → Refresh Issue Templates
 ```
 
-## 📁 Repository Structure
+Deprovisioning is the full reverse, supporting multiple accounts in a single issue:
+
+```
+GitHub Issue Form (multi-select) → Label Applied → GitHub Actions
+  → Parse Issue → Production Approval Gate
+  → Matrix job per account (parallel, fail-fast: false):
+       Idira SCA policies destroyed (terraform destroy)
+       AWS account returned to pool OU
+  → Single summary comment → Close Issue → Refresh Issue Templates
+```
+
+## Repository Structure
 
 ```
 .
 ├── .github/
 │   ├── ISSUE_TEMPLATE/
-│   │   └── aws-account-request.yml       # GitHub issue form template
+│   │   ├── aws-account-request.yml       # Provision form (single account, Simulate/Create modes)
+│   │   └── aws-account-deprovision.yml   # Deprovision form (multi-select)
 │   └── workflows/
-│       └── aws-account-vending.yml        # Main automation workflow
-│
+│       ├── aws-account-vending.yml        # Provision pipeline
+│       ├── aws-account-deprovision.yml    # Deprovision pipeline
+│       └── refresh-issue-templates.yml    # Dropdown refresh (daily + after every run)
 ├── modules/
-│   ├── cyberark-auth/                     # CyberArk Identity auth module
-│   │   ├── main.tf
-│   │   ├── variables.tf
-│   │   └── outputs.tf
-│   │
-│   ├── aws-account/                       # AWS account provisioning module
-│   │   ├── main.tf
-│   │   ├── variables.tf
-│   │   └── outputs.tf
-│   │
-│   └── aws-iam-policies/                  # IAM roles and policies module
-│       ├── main.tf
-│       ├── variables.tf
-│       └── outputs.tf
-│
+│   ├── idira-policy/                      # idsec_policy_cloud_access × 3 (poweruser, audit, cloudops)
+│   └── aws-account/                       # aws_organizations_account resource
 ├── use-cases/
-│   └── aws-account-vending/               # Root Terraform configuration
-│       ├── main.tf
-│       ├── variables.tf
-│       └── outputs.tf
-│
+│   ├── aws-account-vending/               # Create mode: Terraform for real AWS account creation
+│   └── idira-sca-policy/                  # SCA policies: idsec provider only, no AWS
+├── CLAUDE.md                              # Project instructions for Claude Code
 └── README.md
 ```
 
-## 🚀 Getting Started
+## Prerequisites
 
-### Prerequisites
+### GitHub Secrets
 
-1. **GitHub Repository Secrets**: Configure the following secrets in your repository settings:
-   - `CYBERARK_SUBDOMAIN`: Tenant subdomain only (e.g. `abc1234`, not the full URL)
-   - `CYBERARK_CLIENT_ID`: OAuth2 client ID for CyberArk Identity
-   - `CYBERARK_CLIENT_SECRET`: OAuth2 client secret for CyberArk Identity
+| Secret | Value format |
+|---|---|
+| `IDIRA_SUBDOMAIN` | Tenant subdomain prefix only, e.g. `murphyslab` (not a full URL) |
+| `SECRETSMGR_URL` | `https://<tenant>.secretsmgr.cyberark.cloud` |
+| `SECRETSMGR_ACCOUNT` | Account name, typically `conjur` |
+| `SECRETSMGR_JWT_AUTHENTICATOR_ID` | JWT authenticator service ID, e.g. `github` |
+| `SECRETSMGR_AUDIENCE` | Audience value configured in the JWT authenticator, e.g. `magicmarkh` |
+| `SCA_SERVICE_ACCT_USERNAME_PATH` | Secrets Manager variable path for Idira service user client ID |
+| `SCA_SERVICE_ACCT_PASSWORD_PATH` | Secrets Manager variable path for Idira service user client secret |
+| `AWS_MANAGEMENT_ACCOUNT_ID` | 12-digit AWS management account ID |
+| `AWS_POOL_OU_ID` | OU ID for pre-staged pool accounts |
+| `AWS_ACTIVE_OU_ID` | OU ID for accounts currently in use |
+| `SCA_POWER_USER_PERMISSION_SET_ARN` | IAM Identity Center permission set ARN for power user |
+| `SCA_AUDIT_PERMISSION_SET_ARN` | IAM Identity Center permission set ARN for audit |
+| `SCA_CLOUDOPS_PERMISSION_SET_ARN` | IAM Identity Center permission set ARN for cloud ops |
+| `IDIRA_POWERUSER_ROLE` | Idira Identity role name for power user access |
+| `IDIRA_AUDITOR_ROLE` | Idira Identity role name for auditors |
+| `IDIRA_CLOUDOPS_ROLE` | Idira Identity role name for cloud ops |
 
-2. **GitHub Environment**: Create a `production` environment in your repository settings with required reviewers for approval gates
+### GitHub Environment
 
-3. **AWS Credentials**: Configure AWS credentials for the GitHub Actions runner (via IAM role or secrets)
+Create an environment named `production` under **Settings → Environments** with required reviewers enabled. Every destructive workflow step gates on this environment.
 
-4. **Terraform Backend**: Update the backend configuration in [use-cases/aws-account-vending/main.tf](use-cases/aws-account-vending/main.tf) for remote state storage
+### GitHub Labels
 
-### Configuration Steps
+Create the following labels in the repository:
+- `provision-aws-account` — triggers the provisioning workflow
+- `provisioned` — applied on successful provisioning
+- `deprovision-aws-account` — triggers the deprovisioning workflow
+- `returned-to-pool` — applied on successful deprovisioning
 
-1. **Clone the repository**:
-   ```bash
-   git clone <repository-url>
-   cd <repository-name>
-   ```
+### AWS Setup
 
-2. **Configure GitHub Secrets**:
-   - Navigate to **Settings** → **Secrets and variables** → **Actions**
-   - Add the three required CyberArk secrets
+- IAM role `GitHubActionsOrgProvisioner` in the management account:
+  - Trust: GitHub OIDC (`token.actions.githubusercontent.com`)
+  - Permissions: `AWSOrganizationsFullAccess`, `iam:CreateAccountAlias`, `iam:DeleteAccountAlias`, `iam:ListAccountAliases`
+- IAM Identity Center permission sets pre-created for PowerUser, Audit, CloudOps
+- Pool OU accounts pre-staged and tagged `Status=Available`
 
-3. **Set up Production Environment**:
-   - Navigate to **Settings** → **Environments**
-   - Create a new environment named `production`
-   - Add required reviewers under **Protection rules**
+### Secrets Manager SaaS Setup
 
-4. **Implement Terraform Modules**:
-   - Complete the implementation in `modules/cyberark-auth/`
-   - Complete the implementation in `modules/aws-account/`
-   - Complete the implementation in `modules/aws-iam-policies/`
+- JWT authenticator (`authn-jwt`) configured for GitHub OIDC
+- Host identity in Secrets Manager with the annotation `authn-jwt/<service-id>/repository_id` set to the numeric GitHub repository ID
+- Host granted `authenticate` on the webservice and `execute` on the two variable resources (client ID path and client secret path)
 
-## 📝 How to Request an AWS Account
+## Demo Flow
 
-### Step 1: Create a New Issue
+1. Run **Refresh Issue Templates** (or wait for the 06:00 UTC daily run)
+2. Open **Issues → New Issue → AWS Account Request**
+3. Select **Simulate**, choose a pool account from the dropdown
+4. Submit the issue and apply the label `provision-aws-account`
+5. Approve the `production` gate in the Actions tab
+6. Account moves from pool OU → active OU, tagged InUse
+7. Idira SCA policies created for PowerUser, Audit, CloudOps roles
+8. Issue receives a comment with account details and SCA policy table, then closes
+9. Access the account via Idira Secure Cloud Access
+10. Open **Issues → New Issue → AWS Account Deprovision Request**
+11. Select one or more accounts from the multi-select dropdown
+12. Apply the label `deprovision-aws-account` and approve the `production` gate
+13. Each account runs in its own matrix job: SCA policies destroyed, account returned to pool
+14. A single summary comment is posted; issue closes when all accounts complete successfully
 
-1. Navigate to the **Issues** tab in this repository
-2. Click **New Issue**
-3. Select **AWS Account Request** template
+## Provisioning Modes
 
-### Step 2: Fill Out the Request Form
+**Simulate** (recommended for demos): Assigns a pre-staged account from the pool OU. Fast — no AWS account creation. Account is tagged `InUse` and moved to the active OU.
 
-Provide the following required information:
+**Create**: Provisions a real AWS Organizations account via `aws_organizations_account` Terraform resource. Slower (~5 min). Enforces unique account name check before applying.
 
-- **Account Name**: Alphanumeric name for the account (e.g., `my-app-prod`)
-- **Account Email**: Unique root email address (e.g., `aws-myapp-prod@company.com`)
-- **Environment**: Select `dev`, `staging`, or `prod`
-- **Owner Team**: Team responsible for the account (e.g., `platform-engineering`)
-- **Business Justification**: Explain why this account is needed
+## Credential Flow
 
-### Step 3: Submit and Label
+AWS credentials are obtained via GitHub OIDC → `GitHubActionsOrgProvisioner` IAM role — no static AWS keys anywhere.
 
-1. Submit the issue
-2. Add the label `provision-aws-account` to trigger the workflow
-3. Wait for the production approval gate (required for all provisioning)
+Idira (idsec provider) credentials are fetched at runtime from Secrets Manager SaaS:
+1. GitHub OIDC JWT is exchanged with the Secrets Manager JWT authenticator
+2. The resulting session token is used to read the service account client ID and secret
+3. These are injected as `TF_VAR_idira_client_id` and `TF_VAR_idira_client_secret`
 
-### Step 4: Approve (Approvers Only)
+## Security
 
-If you're a designated approver:
-1. Review the account request details
-2. Navigate to the **Actions** tab and find the pending workflow run
-3. Review and approve the deployment to the `production` environment
-
-### Step 5: Monitor Progress
-
-- The workflow will comment on the issue with:
-  - Terraform plan output (before apply)
-  - Success/failure status
-  - Account details upon completion
-- The issue will automatically close upon successful provisioning
-
-## 🔒 Security Features
-
-### CyberArk Identity Integration
-- OAuth2 client credentials flow for secure authentication
-- Token-based access control
-- Secrets retrieved from CyberArk vault (when implemented)
-
-### Production Approval Gate
-- All account provisioning requires manual approval
-- Designated reviewers must approve before Terraform runs
-- Prevents unauthorized or accidental account creation
-
-### Terraform State Security
-- Remote state storage with encryption (configure in `main.tf`)
-- State locking to prevent concurrent modifications
-- Sensitive outputs marked as sensitive
-
-### AWS Account Security Baseline
-- CloudTrail enabled by default
-- AWS Config enabled by default
-- GuardDuty enabled by default
-- Baseline IAM roles with least-privilege access
-- MFA required for production accounts
-
-## 🔧 Workflow Details
-
-### Trigger
-The workflow triggers when an issue receives the `provision-aws-account` label.
-
-### Steps
-1. **Parse Issue**: Extract request parameters from the GitHub issue form
-2. **Authenticate**: Obtain OAuth2 token from CyberArk Identity
-3. **Approval Gate**: Wait for manual approval (production environment)
-4. **Terraform Init**: Initialize Terraform working directory
-5. **Terraform Plan**: Generate and comment execution plan on the issue
-6. **Terraform Apply**: Provision the AWS account and resources
-7. **Update Issue**: Post results and close issue on success
-
-### Environment Variables
-The workflow passes the following variables to Terraform:
-- `TF_VAR_account_name`
-- `TF_VAR_account_email`
-- `TF_VAR_environment`
-- `TF_VAR_owner_team`
-- `TF_VAR_cyberark_token`
-
-## 🛠️ Development & Customization
-
-### Adding Custom IAM Policies
-
-Edit [modules/aws-iam-policies/main.tf](modules/aws-iam-policies/main.tf) to add custom policies for specific teams or use cases.
-
-### Modifying Account Baseline
-
-Update [modules/aws-account/main.tf](modules/aws-account/main.tf) to change baseline configurations like:
-- Organizational Units (OUs)
-- Additional AWS services
-- Account-level settings
-
-### Extending the Request Form
-
-Modify [.github/ISSUE_TEMPLATE/aws-account-request.yml](.github/ISSUE_TEMPLATE/aws-account-request.yml) to add additional fields. Remember to update the workflow to parse new fields.
-
-## 📊 Monitoring & Troubleshooting
-
-### View Workflow Runs
-- Navigate to **Actions** tab to see all workflow executions
-- Click on a specific run to view detailed logs
-
-### Common Issues
-
-**Authentication Failure**:
-- Verify CyberArk secrets are correctly configured
-- Check token expiration settings
-- Ensure OAuth2 client has appropriate permissions
-
-**Terraform Errors**:
-- Review Terraform outputs in the issue comments
-- Check AWS credentials and permissions
-- Verify account email is unique across the organization
-
-**Approval Timeout**:
-- Ensure production environment has designated reviewers
-- Check reviewer availability
-- Workflow will wait indefinitely until approved or canceled
-
-## 🤝 Contributing
-
-1. Create a feature branch
-2. Make your changes
-3. Test with a dev environment account request
-4. Submit a pull request with a clear description
-
-## 📄 License
-
-[Specify your license here]
-
-## 🆘 Support
-
-For issues or questions:
-- Create an issue in this repository
-- Contact the Platform Engineering team
-- Refer to internal documentation
-
----
-
-**Note**: This is a scaffold implementation. Complete the TODO items in the Terraform modules before using in production.
+- No static credentials stored in GitHub — all sensitive values retrieved at runtime
+- Production approval gate required before any account changes
+- Two-OU safety model: deprovision only touches accounts in `AWS_ACTIVE_OU_ID`; accounts in any other OU are blocked with a hard error
+- SCA policy names include a `random_string` suffix keyed on account ID to prevent name collisions across provision/deprovision cycles
+- SCA Terraform state retained as a GitHub Actions artifact for 90 days (sufficient for demo lifecycle)
