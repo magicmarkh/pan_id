@@ -51,8 +51,7 @@ GitHub Issue Form (multi-select) → Label Applied → GitHub Actions
 
 | Secret | Value format |
 |---|---|
-| `IDIRA_SUBDOMAIN` | Tenant subdomain prefix only, e.g. `murphyslab` (not a full URL) |
-| `SECRETSMGR_URL` | `https://<tenant>.secretsmgr.cyberark.cloud` |
+| `IDIRA_SUBDOMAIN` | Tenant subdomain prefix only, e.g. `murphyslab` — used for both idsec provider and Secrets Manager SaaS (URL constructed as `https://<subdomain>.secretsmgr.cyberark.cloud`) |
 | `SECRETSMGR_ACCOUNT` | Account name, typically `conjur` |
 | `SECRETSMGR_JWT_AUTHENTICATOR_ID` | JWT authenticator service ID, e.g. `github` |
 | `SECRETSMGR_AUDIENCE` | Audience value configured in the JWT authenticator, e.g. `magicmarkh` |

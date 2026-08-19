@@ -99,8 +99,7 @@ pan_id/
 ## GitHub Secrets Required
 | Secret | Description |
 |---|---|
-| `IDIRA_SUBDOMAIN` | ISP tenant subdomain **name** e.g. `murphyslab` — the prefix of `<subdomain>.cyberark.cloud`. NOT the Identity tenant ID (e.g. `abv4527`). Used by idsec provider via `platform-discovery.cyberark.cloud/api/v2/services/subdomain/<value>` |
-| `SECRETSMGR_URL` | Secrets Manager SaaS endpoint e.g. `https://<tenant>.secretsmgr.cyberark.cloud` |
+| `IDIRA_SUBDOMAIN` | ISP tenant subdomain **name** e.g. `murphyslab` — the prefix of `<subdomain>.cyberark.cloud`. NOT the Identity tenant ID (e.g. `abv4527`). Used by idsec provider via `platform-discovery.cyberark.cloud/api/v2/services/subdomain/<value>`. Secrets Manager SaaS URL is constructed from this: `https://<subdomain>.secretsmgr.cyberark.cloud` |
 | `SECRETSMGR_ACCOUNT` | Secrets Manager account name — typically `conjur` |
 | `SECRETSMGR_JWT_AUTHENTICATOR_ID` | JWT authenticator service ID configured in Secrets Manager policy (e.g. `github`) |
 | `SECRETSMGR_AUDIENCE` | JWT audience value expected by the Secrets Manager JWT authenticator (e.g. `magicmarkh`) |

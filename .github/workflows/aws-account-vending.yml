@@ -346,13 +346,15 @@ jobs:
 
       - name: Fetch Idira credentials from Secrets Manager SaaS
         env:
-          SECRETSMGR_URL: ${{ secrets.SECRETSMGR_URL }}
+          IDIRA_SUBDOMAIN: ${{ secrets.IDIRA_SUBDOMAIN }}
           SECRETSMGR_ACCOUNT: ${{ secrets.SECRETSMGR_ACCOUNT }}
           SECRETSMGR_JWT_AUTHENTICATOR_ID: ${{ secrets.SECRETSMGR_JWT_AUTHENTICATOR_ID }}
           SECRETSMGR_AUDIENCE: ${{ secrets.SECRETSMGR_AUDIENCE }}
           USERNAME_PATH: ${{ secrets.SCA_SERVICE_ACCT_USERNAME_PATH }}
           PASSWORD_PATH: ${{ secrets.SCA_SERVICE_ACCT_PASSWORD_PATH }}
         run: |
+          SECRETSMGR_URL="https://${IDIRA_SUBDOMAIN}.secretsmgr.cyberark.cloud"
+
           JWT=$(curl -sS \
             -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${SECRETSMGR_AUDIENCE}" | jq -r '.value')
