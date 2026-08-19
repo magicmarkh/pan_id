@@ -389,17 +389,27 @@ jobs:
           # List authenticators
           curl -v "$CONJUR_URL/api/authenticators" 2>&1 || true
 
-          # Attempt auth (audience=conjur is the Conjur default — may need changing)
-          curl -v -X POST \
+          # Attempt auth and capture token
+          AUTH_RESPONSE=$(curl -s -o /tmp/conjur_token.json -w "%{http_code}" \
+            -X POST \
             -H "Content-Type: application/x-www-form-urlencoded" \
             --data-urlencode "jwt=$JWT" \
-            "$CONJUR_URL/api/authn-jwt/$CONJUR_JWT_AUTHENTICATOR_ID/$CONJUR_ACCOUNT/authenticate" 2>&1 || true
+            "$CONJUR_URL/api/authn-jwt/$CONJUR_JWT_AUTHENTICATOR_ID/$CONJUR_ACCOUNT/authenticate")
+          echo "Auth HTTP status: $AUTH_RESPONSE"
+          echo "Auth response body: $(cat /tmp/conjur_token.json)"
 
-          # Also try without /api/ prefix in case CONJUR_URL already includes it
-          curl -v -X POST \
-            -H "Content-Type: application/x-www-form-urlencoded" \
-            --data-urlencode "jwt=$JWT" \
-            "$CONJUR_URL/authn-jwt/$CONJUR_JWT_AUTHENTICATOR_ID/$CONJUR_ACCOUNT/authenticate" 2>&1 || true
+          if [ "$AUTH_RESPONSE" = "200" ]; then
+            echo "✅ Authentication succeeded — testing secret retrieval"
+            CONJUR_TOKEN=$(cat /tmp/conjur_token.json | base64 | tr -d '\n')
+            echo "Fetching username secret..."
+            SECRET_STATUS=$(curl -s -o /tmp/secret_val.txt -w "%{http_code}" \
+              -H "Authorization: Token token=\"$CONJUR_TOKEN\"" \
+              "$CONJUR_URL/api/secrets/$CONJUR_ACCOUNT/variable/$USERNAME_PATH")
+            echo "Secret fetch HTTP status: $SECRET_STATUS"
+            echo "Secret fetch response: $(cat /tmp/secret_val.txt)"
+          else
+            echo "❌ Authentication failed with HTTP $AUTH_RESPONSE"
+          fi
 
           exit 1
 
