@@ -64,5 +64,5 @@ variable "access_window_from_hour" {
 variable "access_window_to_hour" {
   description = "Access window end time, HH:MM:SS"
   type        = string
-  default     = "18:00:00"
+  default     = "21:00:00"
 }

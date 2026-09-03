@@ -38,7 +38,7 @@ GitHub Issue Form (multi-select) → GitHub Actions → [production gate]
   - `PowerUser` — `IDIRA_POWERUSER_ROLE` role, targets PowerUser permission set
   - `Audit` — `IDIRA_AUDITOR_ROLE` role, targets Audit permission set
   - `CloudOps` — `IDIRA_CLOUDOPS_ROLE` role, targets CloudOps permission set
-- All policies: `Recurring`, Mon-Fri 08:00–18:00 UTC, 1 hour max session
+- All policies: `Recurring`, Mon-Fri 08:00–21:00 UTC, 1 hour max session
 - Terraform state stored as GitHub Actions artifact `sca-tfstate-{account_id}` (90 days)
 
 ### 3. AWS Account Deprovisioning (`.github/workflows/aws-account-deprovision.yml`)
@@ -167,7 +167,7 @@ The `refresh-issue-templates.yml` workflow reads these tags to populate dropdown
 - [x] Duplicate account name guard (Create mode)
 - [x] OIDC authentication to AWS — no static keys
 - [x] Human approval gate via GitHub Environments
-- [x] Idira SCA policies — `idsec_policy_cloud_access` for PowerUser / Audit / CloudOps, schema-aligned (Recurring, Mon-Fri 08:00-18:00 UTC, 1h sessions)
+- [x] Idira SCA policies — `idsec_policy_cloud_access` for PowerUser / Audit / CloudOps, schema-aligned (Recurring, Mon-Fri 08:00-21:00 UTC, 1h sessions)
 - [x] SCA policy state persisted as GitHub Actions artifact for deprovision
 - [x] Deprovisioning workflow with multi-account support — matrix job per account, fail-fast disabled, single summary comment
 - [x] Dynamic OU return on deprovision via `aws organizations list-parents` (no hardcoded source OU)
